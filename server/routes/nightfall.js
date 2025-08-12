@@ -196,8 +196,22 @@ router.get('/sessions/:id/state', (req,res) => {
   const rt = getNightfallRealtime()
   if(!rt) return res.status(503).json({ success:false, error:'Realtime service not ready' })
   const s = rt.sessions.get(id)
-  if(!s || !s.lastSnapshot) return res.status(404).json({ success:false, error:'No snapshot yet' })
-  res.json({ success:true, snapshot: s.lastSnapshot })
+  if(s && s.lastSnapshot) return res.json({ success:true, snapshot: s.lastSnapshot })
+  // Attempt cold load if missing
+  ;(async () => {
+    try {
+      const { loadNightfallSnapshot } = await import('../services/nightfallPersistence.js')
+      const loaded = await loadNightfallSnapshot(id)
+      if(loaded?.snapshot){
+        const sess = rt.getSession(id)
+        sess.lastSnapshot = loaded.snapshot
+        return res.json({ success:true, snapshot: loaded.snapshot, loadedFrom: loaded.loadedFrom || 'file' })
+      }
+      return res.status(404).json({ success:false, error:'No snapshot yet' })
+    } catch (e) {
+      return res.status(500).json({ success:false, error:'Load failed' })
+    }
+  })()
 })
 
 // Metrics for diagnostics (development only)

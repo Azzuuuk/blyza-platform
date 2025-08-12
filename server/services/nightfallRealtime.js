@@ -43,7 +43,15 @@ export class NightfallRealtime {
     if (sess.lastSnapshot) {
       socket.emit('nightfall_state', { full: true, snapshot: sess.lastSnapshot })
     } else {
-      socket.emit('nightfall_state', { heartbeat: true })
+      // Attempt cold-load from persistence (DB/file) once
+      ;(async () => {
+        const loaded = await this._coldLoad(sessionId)
+        if (loaded) {
+          socket.emit('nightfall_state', { full: true, snapshot: loaded })
+        } else {
+          socket.emit('nightfall_state', { heartbeat: true })
+        }
+      })()
     }
   }
 
@@ -52,7 +60,12 @@ export class NightfallRealtime {
     const sess = this.getSession(sessionId)
     if (sess.lastSnapshot) {
       socket.emit('nightfall_state', { full: true, snapshot: sess.lastSnapshot })
+      return
     }
+    ;(async () => {
+      const loaded = await this._coldLoad(sessionId)
+      if (loaded) socket.emit('nightfall_state', { full: true, snapshot: loaded })
+    })()
   }
 
   handleStateDiff(socket, { sessionId, full, snapshot, patch, ts }) {
@@ -191,5 +204,19 @@ export class NightfallRealtime {
       if(snap.recentChat && !Array.isArray(snap.recentChat)) return false
       return true
     } catch { return false }
+  }
+
+  async _coldLoad(sessionId){
+    try {
+      const sess = this.getSession(sessionId)
+      if (sess.lastSnapshot) return sess.lastSnapshot
+      const { loadNightfallSnapshot } = await import('./nightfallPersistence.js')
+      const loaded = await loadNightfallSnapshot(sessionId)
+      if (loaded?.snapshot && this._validateSnapshot(loaded.snapshot)) {
+        sess.lastSnapshot = loaded.snapshot
+        return loaded.snapshot
+      }
+    } catch {/* ignore */}
+    return null
   }
 }
