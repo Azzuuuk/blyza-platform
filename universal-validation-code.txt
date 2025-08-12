@@ -1,0 +1,64 @@
+// UNIVERSAL VALIDATION - Works with any data structure
+const inputData = $input.all();
+
+// Check if we have any data
+if (!inputData || inputData.length === 0) {
+  throw new Error('No input data received');
+}
+
+const firstItem = inputData[0];
+
+// Function to recursively search for data in any nested structure
+function findDataRecursively(obj, path = '') {
+  if (!obj || typeof obj !== 'object') return null;
+  
+  // Check if this object has both quantitative and qualitative
+  if (obj.quantitative && obj.qualitative) {
+    return obj;
+  }
+  
+  // Search in all properties
+  for (const [key, value] of Object.entries(obj)) {
+    if (typeof value === 'object' && value !== null) {
+      const found = findDataRecursively(value, path + '.' + key);
+      if (found) return found;
+    }
+  }
+  
+  return null;
+}
+
+// Try to find the data anywhere in the structure
+let data = findDataRecursively(firstItem);
+
+if (!data) {
+  // If still not found, try some common locations directly
+  if (firstItem.quantitative || firstItem.qualitative) {
+    data = firstItem;
+  } else if (firstItem.body && (firstItem.body.quantitative || firstItem.body.qualitative)) {
+    data = firstItem.body;
+  } else if (firstItem.json && (firstItem.json.quantitative || firstItem.json.qualitative)) {
+    data = firstItem.json;
+  }
+}
+
+if (!data) {
+  throw new Error('Could not locate quantitative/qualitative data anywhere in the input structure');
+}
+
+// Validate required fields
+const hasQuantitative = !!(data.quantitative && 
+  data.quantitative.gameInfo && 
+  data.quantitative.quantitativeData && 
+  data.quantitative.playerMetrics);
+
+const hasQualitative = !!(data.qualitative && 
+  data.qualitative.managerInfo && 
+  data.qualitative.managerObservations);
+
+if (!hasQuantitative && !hasQualitative) {
+  throw new Error(`Missing required data structure: quantitative(${hasQuantitative}) or qualitative(${hasQualitative})`);
+}
+
+// Return the validated data
+return [{ json: data }];

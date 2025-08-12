@@ -1,0 +1,51 @@
+{
+  "name": "Blyza Team Analysis Workflow - Debug Version",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "blyza-analysis",
+        "options": {},
+        "responseData": "allEntries",
+        "responseMode": "onReceived"
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [240, 300],
+      "webhookId": "auto-generated"
+    },
+    {
+      "parameters": {
+        "functionCode": "// Debug Data Validation with detailed logging\nconsole.log('=== DEBUG: Data Validation Start ===');\nconsole.log('Items received:', items.length);\nconsole.log('Item 0 structure:', Object.keys(items[0]));\nconsole.log('Item 0 json keys:', Object.keys(items[0].json || {}));\nconsole.log('Full item 0:', JSON.stringify(items[0], null, 2));\n\nconst data = items[0].json;\n\nconsole.log('Data extracted:', typeof data);\nconsole.log('Data keys:', Object.keys(data || {}));\nconsole.log('Has quantitative:', !!data.quantitative);\nconsole.log('Has qualitative:', !!data.qualitative);\nconsole.log('Has sessionId:', !!data.sessionId);\n\n// Check if data is nested\nif (data.data) {\n  console.log('Found nested data object');\n  console.log('Nested data keys:', Object.keys(data.data));\n}\n\n// Try to extract the correct data\nlet actualData = data;\nif (data.data && !data.quantitative && !data.qualitative) {\n  console.log('Using nested data structure');\n  actualData = data.data;\n}\n\nconsole.log('Final data for validation:');\nconsole.log('- sessionId:', actualData.sessionId);\nconsole.log('- quantitative type:', typeof actualData.quantitative);\nconsole.log('- qualitative type:', typeof actualData.qualitative);\n\nif (!actualData.quantitative || !actualData.qualitative) {\n  const error = `Missing required data: quantitative(${!!actualData.quantitative}) or qualitative(${!!actualData.qualitative})`;\n  console.log('VALIDATION FAILED:', error);\n  throw new Error(error);\n}\n\nif (!actualData.sessionId) {\n  console.log('VALIDATION FAILED: Missing session ID');\n  throw new Error('Missing session ID');\n}\n\nconsole.log('✅ Data validation passed for session:', actualData.sessionId);\n\n// Structure the data for analysis (with safety checks)\nconst structuredData = {\n  sessionId: actualData.sessionId,\n  timestamp: actualData.timestamp,\n  gameMetrics: {\n    participationRate: actualData.quantitative?.quantitativeData?.participationRate || 0,\n    responseTime: actualData.quantitative?.quantitativeData?.averageResponseTime || 0,\n    engagement: actualData.quantitative?.quantitativeData?.emotionalEngagement || 0,\n    collaboration: actualData.quantitative?.quantitativeData?.collaborationScore || 0,\n    playerCount: actualData.quantitative?.playerMetrics?.length || 0\n  },\n  managerObservations: {\n    teamDynamics: actualData.qualitative?.managerObservations?.teamDynamics || '',\n    communication: actualData.qualitative?.managerObservations?.communicationIssues || '',\n    leadership: actualData.qualitative?.managerObservations?.leadershipEmergence || '',\n    creativity: actualData.qualitative?.managerObservations?.creativityLevel || 'medium',\n    trust: actualData.qualitative?.managerObservations?.trustIndicators || ''\n  },\n  managerInfo: actualData.qualitative?.managerInfo || {},\n  gameInfo: actualData.quantitative?.gameInfo || {}\n};\n\nconsole.log('=== DEBUG: Data Validation End ===');\nreturn [{ json: structuredData }];"
+      },
+      "id": "data-validation",
+      "name": "Data Validation Debug",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [460, 300]
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Data Validation Debug",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0,
+  "updatedAt": "2025-08-10T20:00:00.000Z",
+  "versionId": "1"
+}

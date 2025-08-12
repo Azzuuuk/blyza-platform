@@ -1,0 +1,50 @@
+// FINAL WORKING VALIDATION CODE - Replace your Data Validation node with this
+const inputData = $input.all();
+
+console.log('=== DATA VALIDATION START ===');
+console.log('Input data length:', inputData.length);
+
+// Check if we have any data
+if (!inputData || inputData.length === 0) {
+  throw new Error('No input data received');
+}
+
+// Get the first item
+const firstItem = inputData[0];
+console.log('First item keys:', Object.keys(firstItem));
+
+// The data is in the body property
+let data = null;
+if (firstItem.body) {
+  data = firstItem.body;
+  console.log('✅ Found data in body property');
+} else {
+  throw new Error('Could not locate body property in input');
+}
+
+console.log('Data keys:', Object.keys(data));
+
+// Validate required fields
+const hasQuantitative = !!(data.quantitative && 
+  data.quantitative.gameInfo && 
+  data.quantitative.quantitativeData && 
+  data.quantitative.playerMetrics);
+
+const hasQualitative = !!(data.qualitative && 
+  data.qualitative.managerInfo && 
+  data.qualitative.managerObservations);
+
+console.log('Quantitative validation:', hasQuantitative);
+console.log('Qualitative validation:', hasQualitative);
+
+if (!hasQuantitative && !hasQualitative) {
+  console.log('❌ VALIDATION FAILED');
+  console.log('Available data keys:', Object.keys(data));
+  throw new Error(`Missing required data: quantitative(${hasQuantitative}) or qualitative(${hasQualitative})`);
+}
+
+console.log('✅ VALIDATION PASSED');
+console.log('SessionId:', data.sessionId);
+
+// Return the validated data from body
+return [{ json: data }];

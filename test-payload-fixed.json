@@ -1,0 +1,49 @@
+{
+  "sessionId": "test-session-backend-fix",
+  "timestamp": "2025-01-11T20:45:00.000Z",
+  "quantitative": {
+    "gameInfo": {
+      "gameName": "Code Breakers",
+      "duration": 300,
+      "difficulty": "spy",
+      "category": "problem-solving"
+    },
+    "quantitativeData": {
+      "messagesDecoded": 3,
+      "totalMessages": 4,
+      "completionRate": 75,
+      "hintsUsed": 2,
+      "finalScore": 850,
+      "teamworkScore": 80
+    },
+    "playerMetrics": [
+      {
+        "playerId": "p1",
+        "name": "Alice",
+        "engagement": 8.5,
+        "responses": 3
+      },
+      {
+        "playerId": "p2", 
+        "name": "Bob",
+        "engagement": 7.2,
+        "responses": 0
+      }
+    ]
+  },
+  "qualitative": {
+    "managerInfo": {
+      "managerName": "System Generated",
+      "managerEmail": "system@blyza.com",
+      "department": "Gaming",
+      "teamSize": 2
+    },
+    "managerObservations": {
+      "teamDynamics": "Moderate collaboration",
+      "communicationIssues": "Team solved clues efficiently",
+      "leadershipEmergence": "Leadership patterns observed during gameplay",
+      "creativityLevel": "medium",
+      "trustIndicators": "Team worked together to decode messages"
+    }
+  }
+}

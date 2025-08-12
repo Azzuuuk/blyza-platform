@@ -1,0 +1,67 @@
+// ROBUST VALIDATION CODE - Handles both webhook and manual execution
+const inputData = $input.all();
+
+console.log('=== DATA VALIDATION START ===');
+console.log('Input data length:', inputData.length);
+
+// Check if we have any data
+if (!inputData || inputData.length === 0) {
+  throw new Error('No input data received');
+}
+
+// Get the first item
+const firstItem = inputData[0];
+console.log('First item keys:', Object.keys(firstItem));
+
+// Try multiple data access patterns
+let data = null;
+
+// Pattern 1: Direct access (manual execution)
+if (firstItem.quantitative || firstItem.qualitative) {
+  data = firstItem;
+  console.log('✅ Found data via direct access (manual execution)');
+}
+// Pattern 2: Via body property (webhook execution)
+else if (firstItem.body && (firstItem.body.quantitative || firstItem.body.qualitative)) {
+  data = firstItem.body;
+  console.log('✅ Found data via body property (webhook execution)');
+}
+// Pattern 3: Via json property
+else if (firstItem.json && (firstItem.json.quantitative || firstItem.json.qualitative)) {
+  data = firstItem.json;
+  console.log('✅ Found data via json property');
+}
+else {
+  console.log('❌ Could not locate data in any expected location');
+  console.log('Available keys:', Object.keys(firstItem));
+  if (firstItem.body) console.log('Body keys:', Object.keys(firstItem.body));
+  if (firstItem.json) console.log('JSON keys:', Object.keys(firstItem.json));
+  throw new Error('Could not locate quantitative/qualitative data in input');
+}
+
+console.log('Data keys:', Object.keys(data));
+
+// Validate required fields
+const hasQuantitative = !!(data.quantitative && 
+  data.quantitative.gameInfo && 
+  data.quantitative.quantitativeData && 
+  data.quantitative.playerMetrics);
+
+const hasQualitative = !!(data.qualitative && 
+  data.qualitative.managerInfo && 
+  data.qualitative.managerObservations);
+
+console.log('Quantitative validation:', hasQuantitative);
+console.log('Qualitative validation:', hasQualitative);
+
+if (!hasQuantitative && !hasQualitative) {
+  console.log('❌ VALIDATION FAILED');
+  console.log('Available data keys:', Object.keys(data));
+  throw new Error(`Missing required data: quantitative(${hasQuantitative}) or qualitative(${hasQualitative})`);
+}
+
+console.log('✅ VALIDATION PASSED');
+console.log('SessionId:', data.sessionId);
+
+// Return the validated data
+return [{ json: data }];

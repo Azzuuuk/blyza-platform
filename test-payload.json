@@ -1,0 +1,38 @@
+{
+  "sessionId": "curl-test-1754839200000",
+  "timestamp": "2025-08-10T15:20:00.000Z",
+  "quantitative": {
+    "gameInfo": {
+      "gameName": "Build Tower Game",
+      "duration": 25,
+      "difficulty": "medium",
+      "category": "team-building"
+    },
+    "quantitativeData": {
+      "participationRate": 95,
+      "averageResponseTime": 7.2,
+      "emotionalEngagement": 8.5,
+      "collaborationScore": 9.0
+    },
+    "playerMetrics": [
+      { "playerId": "p1", "name": "Alice Johnson", "engagement": 9, "responses": 20 },
+      { "playerId": "p2", "name": "Bob Smith", "engagement": 8, "responses": 18 },
+      { "playerId": "p3", "name": "Carol Davis", "engagement": 9, "responses": 22 }
+    ]
+  },
+  "qualitative": {
+    "managerInfo": {
+      "managerName": "Sarah Johnson",
+      "managerEmail": "sarah.johnson@testcompany.com",
+      "department": "Engineering",
+      "teamSize": 3
+    },
+    "managerObservations": {
+      "teamDynamics": "Excellent collaboration and communication throughout the session",
+      "communicationIssues": "Some minor interruptions but overall very good communication",
+      "leadershipEmergence": "Alice demonstrated clear leadership qualities and guided the team effectively",
+      "creativityLevel": "high",
+      "trustIndicators": "Team members felt comfortable sharing ideas and providing honest feedback"
+    }
+  }
+}

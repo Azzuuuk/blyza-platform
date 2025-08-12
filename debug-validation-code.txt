@@ -1,0 +1,35 @@
+// TEMPORARY DEBUG VALIDATION - Replace your Data Validation node with this code temporarily
+const inputData = $input.all();
+
+console.log('=== FULL DEBUG OUTPUT ===');
+console.log('Input data length:', inputData.length);
+console.log('Raw input data:', JSON.stringify(inputData, null, 2));
+
+if (inputData && inputData.length > 0) {
+  const firstItem = inputData[0];
+  console.log('=== FIRST ITEM ANALYSIS ===');
+  console.log('First item type:', typeof firstItem);
+  console.log('First item keys:', Object.keys(firstItem));
+  
+  // Check all possible data locations
+  console.log('=== DATA LOCATION CHECK ===');
+  console.log('Direct quantitative:', !!firstItem.quantitative);
+  console.log('Direct qualitative:', !!firstItem.qualitative);
+  console.log('Via json.quantitative:', !!(firstItem.json && firstItem.json.quantitative));
+  console.log('Via json.qualitative:', !!(firstItem.json && firstItem.json.qualitative));
+  console.log('Via body.quantitative:', !!(firstItem.body && firstItem.body.quantitative));
+  console.log('Via body.qualitative:', !!(firstItem.body && firstItem.body.qualitative));
+  
+  if (firstItem.json) {
+    console.log('JSON keys:', Object.keys(firstItem.json));
+  }
+  if (firstItem.body) {
+    console.log('Body keys:', Object.keys(firstItem.body));
+  }
+}
+
+console.log('=== VALIDATION RESULT ===');
+console.log('✅ DEBUG VALIDATION PASSED - Check console logs above');
+
+// Always return success so we can see the full debug output
+return inputData;

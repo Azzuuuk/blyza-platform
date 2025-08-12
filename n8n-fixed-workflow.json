@@ -1,0 +1,51 @@
+{
+  "name": "Fixed Blyza Team Analysis Workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "blyza-analysis",
+        "httpMethod": "POST",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "webhookId": "auto-generated"
+    },
+    {
+      "parameters": {
+        "functionCode": "// Enhanced Data Validation with multiple structure support\nconsole.log('=== ENHANCED DEBUG START ===');\nconsole.log('Total items received:', items.length);\n\nconst item = items[0];\nconsole.log('Item keys:', Object.keys(item));\nconsole.log('Item type:', typeof item);\n\n// Check all possible data locations\nlet data = null;\nlet dataSource = 'unknown';\n\n// Option 1: Direct in json\nif (item.json && typeof item.json === 'object') {\n  console.log('Found item.json, keys:', Object.keys(item.json));\n  \n  // Check if data is directly in json\n  if (item.json.quantitative && item.json.qualitative) {\n    data = item.json;\n    dataSource = 'direct-json';\n  }\n  // Check if data is in body property\n  else if (item.json.body && typeof item.json.body === 'object') {\n    console.log('Found item.json.body, keys:', Object.keys(item.json.body));\n    if (item.json.body.quantitative && item.json.body.qualitative) {\n      data = item.json.body;\n      dataSource = 'json-body';\n    }\n  }\n  // Check if body is a string that needs parsing\n  else if (typeof item.json.body === 'string') {\n    try {\n      const parsed = JSON.parse(item.json.body);\n      console.log('Parsed body keys:', Object.keys(parsed));\n      if (parsed.quantitative && parsed.qualitative) {\n        data = parsed;\n        dataSource = 'parsed-body';\n      }\n    } catch (e) {\n      console.log('Failed to parse body as JSON:', e.message);\n    }\n  }\n}\n\n// Option 2: Direct in item (no json wrapper)\nif (!data && item.quantitative && item.qualitative) {\n  data = item;\n  dataSource = 'direct-item';\n}\n\nconsole.log('Data source:', dataSource);\nconsole.log('Data found:', !!data);\n\nif (data) {\n  console.log('Final data keys:', Object.keys(data));\n  console.log('Has quantitative:', !!data.quantitative);\n  console.log('Has qualitative:', !!data.qualitative);\n  console.log('Has sessionId:', !!data.sessionId);\n  console.log('Quantitative type:', typeof data.quantitative);\n  console.log('Qualitative type:', typeof data.qualitative);\n} else {\n  console.log('❌ No valid data structure found!');\n  console.log('Full item structure:', JSON.stringify(item, null, 2));\n  throw new Error('No valid data structure found. Check console logs for details.');\n}\n\n// Validate required data\nif (!data.quantitative || !data.qualitative) {\n  throw new Error(`Missing required data: quantitative(${!!data.quantitative}) or qualitative(${!!data.qualitative})`);\n}\n\nif (!data.sessionId) {\n  throw new Error('Missing session ID');\n}\n\nconsole.log('✅ Data validation passed for session:', data.sessionId);\n\n// Structure the data for analysis (with safety checks)\nconst structuredData = {\n  sessionId: data.sessionId,\n  timestamp: data.timestamp,\n  gameMetrics: {\n    participationRate: data.quantitative?.quantitativeData?.participationRate || 0,\n    responseTime: data.quantitative?.quantitativeData?.averageResponseTime || 0,\n    engagement: data.quantitative?.quantitativeData?.emotionalEngagement || 0,\n    collaboration: data.quantitative?.quantitativeData?.collaborationScore || 0,\n    playerCount: data.quantitative?.playerMetrics?.length || 0\n  },\n  managerObservations: {\n    teamDynamics: data.qualitative?.managerObservations?.teamDynamics || '',\n    communication: data.qualitative?.managerObservations?.communicationIssues || '',\n    leadership: data.qualitative?.managerObservations?.leadershipEmergence || '',\n    creativity: data.qualitative?.managerObservations?.creativityLevel || 'medium',\n    trust: data.qualitative?.managerObservations?.trustIndicators || ''\n  },\n  managerInfo: data.qualitative?.managerInfo || {},\n  gameInfo: data.quantitative?.gameInfo || {}\n};\n\nconsole.log('=== ENHANCED DEBUG END ===');\nreturn [{ json: structuredData }];"
+      },
+      "id": "data-validation",
+      "name": "Enhanced Data Validation",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [460, 300]
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Enhanced Data Validation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0,
+  "updatedAt": "2025-08-10T20:00:00.000Z",
+  "versionId": "1"
+}

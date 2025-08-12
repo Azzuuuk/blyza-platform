@@ -1,0 +1,31 @@
+# Node & build artifacts
+node_modules/
+dist/
+build/
+
+# Environment files (keep examples, ignore real secrets)
+.env
+.env.*
+!*.env.example
+server/.env
+client/.env
+
+# Firebase / service accounts
+server/serviceAccount*.json
+**/serviceAccount*.json
+
+# Logs & debugging
+*.log
+logs/
+server/*.log
+client/*.log
+
+# OS / Editor
+.DS_Store
+.vscode/
+Thumbs.db
+
+# Misc
+coverage/
+tmp/
+.cache/

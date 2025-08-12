@@ -1,0 +1,51 @@
+{
+  "name": "Simple Debug Webhook",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "blyza-analysis",
+        "options": {},
+        "responseData": "allEntries",
+        "responseMode": "onReceived"
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [240, 300],
+      "webhookId": "auto-generated"
+    },
+    {
+      "parameters": {
+        "functionCode": "// Simple debug - just log everything we receive\nconsole.log('=== SIMPLE DEBUG START ===');\nconsole.log('Total items received:', items.length);\n\nfor (let i = 0; i < items.length; i++) {\n  console.log(`\\n--- Item ${i} ---`);\n  console.log('Item keys:', Object.keys(items[i]));\n  console.log('Item type:', typeof items[i]);\n  \n  if (items[i].json) {\n    console.log('JSON keys:', Object.keys(items[i].json));\n    console.log('JSON content:', JSON.stringify(items[i].json, null, 2));\n  }\n  \n  if (items[i].binary) {\n    console.log('Binary keys:', Object.keys(items[i].binary));\n  }\n  \n  console.log('Full item:', JSON.stringify(items[i], null, 2));\n}\n\nconsole.log('=== SIMPLE DEBUG END ===');\n\n// Just pass through the first item\nreturn [items[0]];"
+      },
+      "id": "simple-debug",
+      "name": "Simple Debug",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [460, 300]
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Simple Debug",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0,
+  "updatedAt": "2025-08-10T20:00:00.000Z",
+  "versionId": "1"
+}

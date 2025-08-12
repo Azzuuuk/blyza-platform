@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Blyza - AI-Powered Team Building Platform</title>
+    <meta name="description" content="Transform your team dynamics with AI-powered team building games, real-time analytics, and actionable insights." />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  </head>
+  <body class="font-sans bg-gradient-to-br from-slate-50 to-blue-50 min-h-screen">
+    <div id="root"></div>
+    <script>
+      // Hard fail-safe: show overlay if an uncaught error occurs before React mounts
+      (function(){
+        let showed = false;
+        function showOverlay(msg, stack){
+          if (showed) return; showed = true;
+          const el = document.createElement('div');
+          el.style.cssText = 'position:fixed;inset:0;background:linear-gradient(135deg,#0f172a,#1e293b,#312e81);color:#e2e8f0;display:flex;align-items:center;justify-content:center;padding:24px;z-index:2147483647;';
+          el.innerHTML = '<div style="max-width:760px;background:rgba(51,65,85,.15);backdrop-filter:blur(12px);border:1px solid rgba(124,58,237,.35);border-radius:16px;padding:24px;box-shadow:0 8px 32px rgba(0,0,0,.3)">' +
+            '<h1 style="margin:0 0 8px;font:800 22px/1.2 Inter,system-ui,sans-serif">Something went wrong</h1>'+
+            '<p style="margin:0 0 12px;color:#cbd5e1">The app hit a runtime error and stopped rendering. Use the details below to fix quickly.</p>'+
+            '<pre style="white-space:pre-wrap;font:500 12px/1.4 ui-monospace,Menlo,monospace;color:#fca5a5;background:rgba(239,68,68,.1);padding:12px;border-radius:8px;max-height:260px;overflow:auto">'+(msg||'Unknown error')+'\n'+(stack||'')+'</pre>'+
+            '<div style="display:flex;gap:8px;margin-top:12px">'+
+            '<button onclick="location.reload()" style="padding:8px 12px;border-radius:8px;border:none;background:linear-gradient(135deg,#7c3aed,#2563eb);color:#fff;font-weight:600">Reload</button>'+
+            '<a href="/test" style="padding:8px 12px;border-radius:8px;border:1px solid rgba(51,65,85,.4);color:#fff;text-decoration:none">Open Test Route</a>'+
+            '</div>'+
+          '</div>'
+          document.body.appendChild(el)
+        }
+        window.addEventListener('error', function(e){
+          // Ignore vite overlay errors in dev; only show if vite overlay not active
+          const fromVite = e?.message && /vite/i.test(e.message)
+          if (!fromVite) showOverlay(e?.message, e?.error?.stack)
+        })
+        window.addEventListener('unhandledrejection', function(e){
+          showOverlay(String(e?.reason?.message || e?.reason || 'Unhandled Promise rejection'), e?.reason?.stack)
+        })
+      })();
+    </script>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>

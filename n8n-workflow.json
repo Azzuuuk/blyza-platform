@@ -1,0 +1,193 @@
+{
+  "name": "Blyza Team Analysis Workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "blyza-analysis",
+        "options": {},
+        "responseData": "allEntries",
+        "responseMode": "onReceived"
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [240, 300],
+      "webhookId": "auto-generated"
+    },
+    {
+      "parameters": {
+        "functionCode": "// Validate incoming data structure\nconst data = items[0].json;\n\nif (!data.quantitative || !data.qualitative) {\n  throw new Error('Missing required data: quantitative or qualitative');\n}\n\nif (!data.sessionId) {\n  throw new Error('Missing session ID');\n}\n\nconsole.log('Data validation passed for session:', data.sessionId);\n\n// Structure the data for analysis\nconst structuredData = {\n  sessionId: data.sessionId,\n  timestamp: data.timestamp,\n  gameMetrics: {\n    participationRate: data.quantitative.quantitativeData.participationRate,\n    responseTime: data.quantitative.quantitativeData.averageResponseTime,\n    engagement: data.quantitative.quantitativeData.emotionalEngagement,\n    collaboration: data.quantitative.quantitativeData.collaborationScore,\n    playerCount: data.quantitative.playerMetrics.length\n  },\n  managerObservations: {\n    teamDynamics: data.qualitative.managerObservations.teamDynamics,\n    communication: data.qualitative.managerObservations.communicationIssues,\n    leadership: data.qualitative.managerObservations.leadershipEmergence,\n    creativity: data.qualitative.managerObservations.creativityLevel,\n    trust: data.qualitative.managerObservations.trustIndicators\n  },\n  managerInfo: data.qualitative.managerInfo,\n  gameInfo: data.quantitative.gameInfo\n};\n\nreturn [{ json: structuredData }];"
+      },
+      "id": "data-validation",
+      "name": "Data Validation",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "resource": "chat",
+        "operation": "create",
+        "chatId": "analysis-chat",
+        "model": "gpt-4",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "You are an expert team building analyst with 20 years of experience in organizational psychology and team dynamics. Analyze the provided team building session data and generate comprehensive insights."
+            },
+            {
+              "role": "user", 
+              "content": "Please analyze this team building session data and provide detailed insights:\n\nGAME METRICS:\n- Participation Rate: {{$json.gameMetrics.participationRate}}%\n- Average Response Time: {{$json.gameMetrics.responseTime}} seconds\n- Engagement Score: {{$json.gameMetrics.engagement}}/10\n- Collaboration Score: {{$json.gameMetrics.collaboration}}/10\n- Team Size: {{$json.gameMetrics.playerCount}} people\n\nMANAGER OBSERVATIONS:\n- Team Dynamics: {{$json.managerObservations.teamDynamics}}\n- Communication Issues: {{$json.managerObservations.communication}}\n- Leadership Emergence: {{$json.managerObservations.leadership}}\n- Creativity Level: {{$json.managerObservations.creativity}}\n- Trust Indicators: {{$json.managerObservations.trust}}\n\nPROVIDE:\n1. Executive Summary (2-3 sentences)\n2. Top 3 Team Strengths\n3. Top 3 Areas for Improvement  \n4. 5 Specific Action Recommendations\n5. Follow-up Activity Suggestions\n6. Risk Assessment (if any)\n\nFormat as JSON with clear sections."
+            }
+          ]
+        },
+        "options": {
+          "temperature": 0.7,
+          "maxTokens": 1500
+        }
+      },
+      "id": "openai-analysis",
+      "name": "OpenAI Analysis",
+      "type": "n8n-nodes-base.openAi",
+      "typeVersion": 1,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Parse AI response and generate report data\nconst aiResponse = items[0].json.message.content;\nconst sessionData = items[0].json;\n\nlet insights;\ntry {\n  insights = JSON.parse(aiResponse);\n} catch (error) {\n  // Fallback if AI doesn't return valid JSON\n  insights = {\n    executiveSummary: aiResponse.substring(0, 200) + '...',\n    strengths: ['Strong team participation', 'Good communication', 'Collaborative approach'],\n    improvements: ['Time management', 'Leadership clarity', 'Creative thinking'],\n    recommendations: ['Weekly check-ins', 'Leadership rotation', 'Skill workshops'],\n    followUp: ['Schedule next session', 'Individual coaching', 'Team retrospective']\n  };\n}\n\n// Generate comprehensive report data\nconst reportData = {\n  sessionId: sessionData.sessionId,\n  timestamp: new Date(),\n  managerEmail: sessionData.managerInfo.managerEmail,\n  managerName: sessionData.managerInfo.managerName,\n  gameInfo: sessionData.gameInfo,\n  \n  // Metrics summary\n  metrics: {\n    overallEngagement: Math.round((sessionData.gameMetrics.engagement + sessionData.gameMetrics.collaboration) * 5), // Convert to percentage\n    participationRate: sessionData.gameMetrics.participationRate,\n    teamCohesion: sessionData.gameMetrics.collaboration * 10,\n    communicationScore: Math.max(90 - (sessionData.managerObservations.communication.length / 10), 60), // Inverse of issues length\n    leadershipClarity: sessionData.managerObservations.leadership.includes('clear') ? 85 : 70\n  },\n  \n  // AI insights\n  insights: insights,\n  \n  // Chart data for dashboard\n  chartData: {\n    engagement: {\n      labels: ['Communication', 'Collaboration', 'Leadership', 'Creativity', 'Trust'],\n      values: [\n        Math.max(90 - (sessionData.managerObservations.communication.length / 10), 60),\n        sessionData.gameMetrics.collaboration * 10,\n        sessionData.managerObservations.leadership.includes('clear') ? 85 : 70,\n        sessionData.managerObservations.creativity === 'high' ? 90 : sessionData.managerObservations.creativity === 'medium' ? 70 : 50,\n        sessionData.managerObservations.trust.length > 50 ? 85 : 65\n      ]\n    }\n  },\n  \n  // PDF generation data\n  pdfData: {\n    title: `Team Analysis Report - ${sessionData.gameInfo.gameName}`,\n    date: new Date().toLocaleDateString(),\n    summary: insights.executiveSummary,\n    metrics: sessionData.gameMetrics,\n    observations: sessionData.managerObservations,\n    recommendations: insights.recommendations\n  }\n};\n\nreturn [{ json: reportData }];"
+      },
+      "id": "generate-report",
+      "name": "Generate Report Data",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Generate PDF report content\nconst reportData = items[0].json;\n\n// Simple HTML to PDF content\nconst htmlContent = `\n<!DOCTYPE html>\n<html>\n<head>\n    <style>\n        body { font-family: Arial, sans-serif; margin: 40px; color: #333; }\n        .header { text-align: center; border-bottom: 2px solid #007bff; padding-bottom: 20px; margin-bottom: 30px; }\n        .metrics { display: flex; justify-content: space-around; margin: 20px 0; }\n        .metric { text-align: center; }\n        .metric-value { font-size: 24px; font-weight: bold; color: #007bff; }\n        .section { margin: 30px 0; }\n        .section h3 { color: #007bff; border-bottom: 1px solid #ddd; padding-bottom: 10px; }\n        .recommendations li { margin: 10px 0; }\n        .footer { margin-top: 50px; text-align: center; color: #666; font-size: 12px; }\n    </style>\n</head>\n<body>\n    <div class=\"header\">\n        <h1>${reportData.pdfData.title}</h1>\n        <p>Generated on ${reportData.pdfData.date}</p>\n        <p>Manager: ${reportData.managerName}</p>\n    </div>\n    \n    <div class=\"section\">\n        <h3>Executive Summary</h3>\n        <p>${reportData.insights.executiveSummary}</p>\n    </div>\n    \n    <div class=\"metrics\">\n        <div class=\"metric\">\n            <div class=\"metric-value\">${reportData.metrics.overallEngagement}%</div>\n            <div>Overall Engagement</div>\n        </div>\n        <div class=\"metric\">\n            <div class=\"metric-value\">${reportData.metrics.participationRate}%</div>\n            <div>Participation Rate</div>\n        </div>\n        <div class=\"metric\">\n            <div class=\"metric-value\">${reportData.metrics.teamCohesion}/10</div>\n            <div>Team Cohesion</div>\n        </div>\n        <div class=\"metric\">\n            <div class=\"metric-value\">${reportData.metrics.communicationScore}%</div>\n            <div>Communication</div>\n        </div>\n    </div>\n    \n    <div class=\"section\">\n        <h3>Team Strengths</h3>\n        <ul>\n            ${reportData.insights.strengths.map(strength => `<li>${strength}</li>`).join('')}\n        </ul>\n    </div>\n    \n    <div class=\"section\">\n        <h3>Areas for Improvement</h3>\n        <ul>\n            ${reportData.insights.improvements.map(improvement => `<li>${improvement}</li>`).join('')}\n        </ul>\n    </div>\n    \n    <div class=\"section\">\n        <h3>Recommended Actions</h3>\n        <ol class=\"recommendations\">\n            ${reportData.insights.recommendations.map(rec => `<li>${rec}</li>`).join('')}\n        </ol>\n    </div>\n    \n    <div class=\"footer\">\n        <p>Generated by Blyza AI Team Analytics Platform</p>\n        <p>Session ID: ${reportData.sessionId}</p>\n    </div>\n</body>\n</html>\n`;\n\n// For demo purposes, we'll create a mock PDF URL\n// In production, you'd use a proper HTML to PDF service\nconst pdfUrl = `https://demo-reports.blyza.com/report-${reportData.sessionId}.pdf`;\n\nreturn [{ \n  json: {\n    ...reportData,\n    pdfContent: htmlContent,\n    pdfUrl: pdfUrl,\n    pdfGenerated: true\n  }\n}];"
+      },
+      "id": "generate-pdf",
+      "name": "Generate PDF",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [1120, 300]
+    },
+    {
+      "parameters": {
+        "fromEmail": "noreply@blyza.com",
+        "toEmail": "={{$json.managerEmail}}",
+        "subject": "Team Building Analysis Report - {{$json.gameInfo.gameName}}",
+        "message": "Hi {{$json.managerName}},\n\nYour team building analysis report is ready! Here are the key highlights:\n\n📊 Overall Engagement: {{$json.metrics.overallEngagement}}%\n👥 Participation Rate: {{$json.metrics.participationRate}}%\n🤝 Team Cohesion: {{$json.metrics.teamCohesion}}/10\n💬 Communication Score: {{$json.metrics.communicationScore}}%\n\n🎯 Top Recommendations:\n{{$json.insights.recommendations.0}}\n{{$json.insights.recommendations.1}}\n{{$json.insights.recommendations.2}}\n\nYou can view the detailed interactive report in your dashboard: https://app.blyza.com/dashboard\n\nThe full PDF report is attached to this email.\n\nBest regards,\nThe Blyza Team",
+        "options": {
+          "attachments": [
+            {
+              "name": "team-analysis-report.pdf",
+              "url": "={{$json.pdfUrl}}"
+            }
+          ]
+        }
+      },
+      "id": "send-email",
+      "name": "Send Email Report",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [1340, 200]
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:3002/api/dashboard/save-report",
+        "options": {
+          "headers": {
+            "Content-Type": "application/json"
+          },
+          "body": {
+            "sessionId": "={{$json.sessionId}}",
+            "reportData": "={{$json}}",
+            "timestamp": "={{$json.timestamp}}",
+            "status": "completed"
+          },
+          "bodyContentType": "json"
+        },
+        "authentication": "genericCredential"
+      },
+      "id": "save-dashboard",
+      "name": "Save to Dashboard",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1340, 400]
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Data Validation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Data Validation": {
+      "main": [
+        [
+          {
+            "node": "OpenAI Analysis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Analysis": {
+      "main": [
+        [
+          {
+            "node": "Generate Report Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Report Data": {
+      "main": [
+        [
+          {
+            "node": "Generate PDF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate PDF": {
+      "main": [
+        [
+          {
+            "node": "Send Email Report",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Save to Dashboard",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0,
+  "updatedAt": "2025-08-09T20:00:00.000Z",
+  "versionId": "1"
+}
