@@ -38,7 +38,14 @@ async function createSession({ title='Operation Nightfall', hostId='host_demo', 
   // Persist session shell in DB if available
   const r = await ensureRepo()
   if(r?.createSessionRecord) {
-    try { await r.createSessionRecord({ id: gs.id, title, hostId, maxPlayers, joinCode }) } catch (e) { /* ignore */ }
+    try {
+      const inserted = await r.createSessionRecord({ id: gs.id, title, hostId, maxPlayers, joinCode })
+      if(inserted?.inserted === 0) {
+        console.warn('[nightfall] session insert skipped (maybe duplicate?)', { id: gs.id })
+      }
+    } catch (e) {
+      console.error('[nightfall] session insert failed', e.message)
+    }
   }
   return gs
 }
