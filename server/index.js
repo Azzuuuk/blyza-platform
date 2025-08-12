@@ -5,7 +5,8 @@ import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
-import { runMigrations } from './services/runMigrations.js';
+// Runtime migration helper removed after initial deployment hardening.
+// (runMigrations import deleted for security cleanup)
 
 // Synchronous (eager) route imports for production reliability (lazy loading caused 404 races on Railway)
 let authRoutes, gameRoutes, lobbyRoutes, analyticsRoutes, reportsRoutes, rewardsRoutes, dashboardRoutes, nightfallRoutes;
@@ -194,20 +195,8 @@ app.get('/health/db', async (req,res) => {
   }
 })
 
-// TEMP one-off runtime migration trigger. REMOVE after first successful run.
-// Requires setting TEMP_ADMIN_TOKEN in the backend service env vars.
-app.post('/admin/migrate', async (req,res) => {
-  try {
-    const token = process.env.TEMP_ADMIN_TOKEN
-    if(!token) return res.status(500).json({ success:false, error:'TEMP_ADMIN_TOKEN not set' })
-    const provided = req.header('x-admin-token') || req.query.token
-    if(provided !== token) return res.status(401).json({ success:false, error:'Unauthorized' })
-    const result = await runMigrations()
-    res.json({ success:true, result })
-  } catch (e) {
-    res.status(500).json({ success:false, error:e.message })
-  }
-})
+// /admin/migrate endpoint removed (initial DB migrations complete). If future migrations
+// need to be triggered at runtime, reintroduce a secured admin route or use CI/CD.
 
 // Eager mount API routes
 const setupRoutes = () => {
