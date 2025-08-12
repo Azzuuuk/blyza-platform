@@ -5,6 +5,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
+import { runMigrations } from './services/runMigrations.js';
 
 // Synchronous (eager) route imports for production reliability (lazy loading caused 404 races on Railway)
 let authRoutes, gameRoutes, lobbyRoutes, analyticsRoutes, reportsRoutes, rewardsRoutes, dashboardRoutes, nightfallRoutes;
@@ -190,6 +191,21 @@ app.get('/health/db', async (req,res) => {
     res.json({ success:true, healthy: ok, diagnostics: dbDiagnostics() })
   } catch (e) {
     res.status(200).json({ success:false, error: e.message })
+  }
+})
+
+// TEMP one-off runtime migration trigger. REMOVE after first successful run.
+// Requires setting TEMP_ADMIN_TOKEN in the backend service env vars.
+app.post('/admin/migrate', async (req,res) => {
+  try {
+    const token = process.env.TEMP_ADMIN_TOKEN
+    if(!token) return res.status(500).json({ success:false, error:'TEMP_ADMIN_TOKEN not set' })
+    const provided = req.header('x-admin-token') || req.query.token
+    if(provided !== token) return res.status(401).json({ success:false, error:'Unauthorized' })
+    const result = await runMigrations()
+    res.json({ success:true, result })
+  } catch (e) {
+    res.status(500).json({ success:false, error:e.message })
   }
 })
 
