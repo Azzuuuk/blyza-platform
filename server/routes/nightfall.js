@@ -1,6 +1,7 @@
 import express from 'express'
 import { getNightfallRealtime } from '../services/nightfallRegistry.js'
 import { GameSession } from '../models/GameSession.js'
+import { randomUUID } from 'crypto'
 
 // In-memory cache (authoritative data stored in Postgres when available)
 const sessions = new Map() // sessionId -> GameSession (runtime only)
@@ -20,8 +21,9 @@ async function ensureRepo(){
 
 async function createSession({ title='Operation Nightfall', hostId='host_demo', maxPlayers=4 }){
   const joinCode = Math.random().toString(36).toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,4) || 'ABCD'
+  // Use a UUID so it persists cleanly into the sessions table (UUID PK)
   const gs = new GameSession({
-    id: `nf_${Date.now().toString(36)}_${Math.random().toString(36).slice(2,6)}`,
+    id: randomUUID(),
     gameId: 'operation-nightfall',
     hostId,
     title,
