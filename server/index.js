@@ -5,8 +5,16 @@ import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
-// Runtime migration helper removed after initial deployment hardening.
-// (runMigrations import deleted for security cleanup)
+// Optional: deferred import for automatic migrations if enabled
+let autoMigrateFn = null
+if(process.env.AUTO_MIGRATE === 'true') {
+  import('./services/runMigrations.js').then(mod => {
+    autoMigrateFn = mod.runMigrations
+    mod.runMigrations().then(r=>{
+      console.log('🗄️  Auto migrations applied', r)
+    }).catch(e=>console.warn('Auto migration failed', e.message))
+  }).catch(()=>{})
+}
 
 // Synchronous (eager) route imports for production reliability (lazy loading caused 404 races on Railway)
 let authRoutes, gameRoutes, lobbyRoutes, analyticsRoutes, reportsRoutes, rewardsRoutes, dashboardRoutes, nightfallRoutes;
