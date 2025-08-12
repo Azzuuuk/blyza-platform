@@ -4,8 +4,10 @@
 
 import express from 'express'
 import { DataCollectionService } from '../services/dataCollectionService.js'
+import { apiKey, maybeJwt, requireAdmin } from '../middleware/auth.js'
 
 const router = express.Router()
+const apiGate = apiKey('DASHBOARD_API_KEY')
 const dataService = new DataCollectionService()
 
 // Root diagnostic (helps confirm router mount in production)
@@ -61,7 +63,7 @@ const authenticateUser = (req, res, next) => {
 /**
  * Get all reports for the authenticated manager
  */
-router.get('/reports', authenticateUser, async (req, res) => {
+router.get('/reports', apiGate, authenticateUser, maybeJwt(), async (req, res) => {
   try {
     const managerId = req.user.id
     const reports = await dataService.getManagerReports(managerId)
@@ -94,7 +96,7 @@ router.get('/reports', authenticateUser, async (req, res) => {
 /**
  * Get a specific report by session ID
  */
-router.get('/reports/:sessionId', authenticateUser, async (req, res) => {
+router.get('/reports/:sessionId', apiGate, authenticateUser, maybeJwt(), async (req, res) => {
   try {
     const { sessionId } = req.params
     const sessionData = await dataService.getSessionData(sessionId)
@@ -138,7 +140,7 @@ router.get('/reports/:sessionId', authenticateUser, async (req, res) => {
  * Save analysis report from n8n workflow
  * This endpoint is called by n8n after processing
  */
-router.post('/save-report', async (req, res) => {
+router.post('/save-report', apiGate, async (req, res) => {
   try {
     const reportData = req.body
     
@@ -172,7 +174,7 @@ router.post('/save-report', async (req, res) => {
 /**
  * Submit game metrics (called after game completion)
  */
-router.post('/submit-metrics', authenticateUser, async (req, res) => {
+router.post('/submit-metrics', apiGate, authenticateUser, maybeJwt(), async (req, res) => {
   try {
     const { sessionId, metrics } = req.body
     
@@ -205,7 +207,7 @@ router.post('/submit-metrics', authenticateUser, async (req, res) => {
 /**
  * Submit manager feedback (called after feedback form completion)
  */
-router.post('/submit-feedback', authenticateUser, async (req, res) => {
+router.post('/submit-feedback', apiGate, authenticateUser, maybeJwt(), async (req, res) => {
   try {
     const { sessionId, feedback } = req.body
     
@@ -248,7 +250,7 @@ router.post('/submit-feedback', authenticateUser, async (req, res) => {
 /**
  * Get dashboard analytics summary
  */
-router.get('/analytics', authenticateUser, async (req, res) => {
+router.get('/analytics', apiGate, authenticateUser, maybeJwt(), async (req, res) => {
   try {
     const managerId = req.user.id
     const reports = await dataService.getManagerReports(managerId)
@@ -294,7 +296,7 @@ router.get('/analytics', authenticateUser, async (req, res) => {
 /**
  * Retry failed n8n workflows
  */
-router.post('/retry-workflows', authenticateUser, async (req, res) => {
+router.post('/retry-workflows', apiGate, authenticateUser, maybeJwt(), requireAdmin(), async (req, res) => {
   try {
     if (req.user.role !== 'admin') {
       return res.status(403).json({
@@ -324,7 +326,7 @@ router.post('/retry-workflows', authenticateUser, async (req, res) => {
 /**
  * Health check endpoint
  */
-router.get('/health', (req, res) => {
+router.get('/health', apiGate, (req, res) => {
   res.json({
     success: true,
     service: 'Dashboard API',

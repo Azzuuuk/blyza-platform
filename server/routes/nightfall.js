@@ -2,6 +2,7 @@ import express from 'express'
 import { getNightfallRealtime } from '../services/nightfallRegistry.js'
 import { GameSession } from '../models/GameSession.js'
 import { randomUUID } from 'crypto'
+import { apiKey } from '../middleware/auth.js'
 
 // In-memory cache (authoritative data stored in Postgres when available)
 const sessions = new Map() // sessionId -> GameSession (runtime only)
@@ -52,14 +53,8 @@ async function createSession({ title='Operation Nightfall', hostId='host_demo', 
 
 const router = express.Router()
 
-// Simple API key gate (env NIGHTFALL_API_KEY). If not set, open for dev.
-const requireKey = (req,res,next) => {
-  const needed = process.env.NIGHTFALL_API_KEY
-  if(!needed) return next()
-  const provided = req.headers['x-api-key']
-  if(provided !== needed) return res.status(401).json({ success:false, error:'invalid api key' })
-  next()
-}
+// API key gate (env NIGHTFALL_API_KEY) using shared middleware
+const requireKey = apiKey('NIGHTFALL_API_KEY')
 
 // Root diagnostic to confirm router is mounted in production
 router.get('/', (req,res) => {
@@ -222,6 +217,36 @@ router.get('/sessions/:id/metrics', (req,res) => {
   const metrics = rt.sessionMetrics.get(id)
   if(!metrics) return res.status(404).json({ success:false, error:'No metrics yet' })
   res.json({ success:true, metrics })
+})
+
+// Player event capture (generic) for analytics (persists to session_events)
+router.post('/sessions/:id/events', requireKey, async (req,res) => {
+  const { id } = req.params
+  const { type, payload } = req.body || {}
+  if(!type) return res.status(400).json({ success:false, error:'type required' })
+  const r = await ensureRepo()
+  if(!r?.recordEvent) return res.status(503).json({ success:false, error:'event recording unavailable' })
+  try {
+    await r.recordEvent({ sessionId: id, type, payload })
+    res.json({ success:true })
+  } catch (e) {
+    res.status(500).json({ success:false, error: e.message })
+  }
+})
+
+// TODO: scheduled cleanup for stale sessions (placeholder). In production deploy, use a cron or external scheduler.
+// For now, expose a manual maintenance endpoint gated by API key.
+router.post('/maintenance/cleanup', requireKey, async (req,res) => {
+  const cutoffMs = parseInt(req.body?.olderThanMs) || 6*60*60*1000 // 6h default
+  const now = Date.now()
+  let removed = 0
+  sessions.forEach((sess, id) => {
+    if(now - new Date(sess.updatedAt).getTime() > cutoffMs){
+      sessions.delete(id)
+      removed += 1
+    }
+  })
+  res.json({ success:true, removed, olderThanMs: cutoffMs })
 })
 
 export default router

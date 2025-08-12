@@ -173,6 +173,33 @@ The platform will be available at:
 - Horizontal scaling with load balancers
 - CDN integration for global performance
 
+### API Keys & Auth (Current Implementation)
+The platform supports lightweight gating:
+- NIGHTFALL_API_KEY: Protects /api/nightfall write endpoints (session create/join/events). If unset, routes are open (dev mode).
+- DASHBOARD_API_KEY: Protects /api/dashboard endpoints.
+- JWT (Authorization: Bearer <token>): If provided (and JWT_SECRET set), decoded and attached to req.user; otherwise a demo user is injected.
+
+Example (create session):
+curl -X POST https://<host>/api/nightfall/sessions \
+   -H "Content-Type: application/json" \
+   -H "X-API-Key: $NIGHTFALL_API_KEY" \
+   -d '{"title":"Team Run","hostId":"mgr_1","maxPlayers":6}'
+
+Generic player event:
+curl -X POST https://<host>/api/nightfall/sessions/<id>/events \
+   -H "Content-Type: application/json" \
+   -H "X-API-Key: $NIGHTFALL_API_KEY" \
+   -d '{"type":"room_enter","payload":{"roomId":2}}'
+
+Cleanup stale runtime sessions (>6h idle):
+curl -X POST https://<host>/api/nightfall/maintenance/cleanup \
+   -H "X-API-Key: $NIGHTFALL_API_KEY" -d '{}' -H 'Content-Type: application/json'
+
+Dashboard metrics submission:
+curl -X POST https://<host>/api/dashboard/submit-metrics \
+   -H "X-API-Key: $DASHBOARD_API_KEY" -H 'Content-Type: application/json' \
+   -d '{"sessionId":"<id>","metrics":{"participationRate":0.9,"playerMetrics":[]}}'
+
 ## 🌍 Deployment
 
 ### Production Environment (Recommended Minimal)
