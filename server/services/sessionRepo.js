@@ -6,13 +6,13 @@ import { randomUUID } from 'crypto'
 // hydrate or look up by the same id instead of having divergent identifiers.
 export async function createSessionRecord({ id, title, hostId, maxPlayers, joinCode }) {
   const finalId = id || randomUUID()
-  await query(
+  const res = await query(
     `INSERT INTO sessions (id, join_code, status, latest_snapshot, snapshot_version, snapshot_checksum)
      VALUES ($1,$2,'lobby', $3, $4, $5)
      ON CONFLICT (id) DO NOTHING`,
     [finalId, joinCode, null, null, null]
   )
-  return { id: finalId, joinCode }
+  return { id: finalId, joinCode, inserted: res.rowCount }
 }
 
 export async function addPlayer({ sessionId, playerId, playerName, role }) {
