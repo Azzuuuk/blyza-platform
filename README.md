@@ -49,37 +49,34 @@ blyza-platform/
 ## 🛠️ Technology Stack
 
 ### Frontend
-- **React 18** with **Next.js 14** (App Router)
-- **TypeScript** for type safety
+- **React 18 + Vite** (fast dev + lean prod bundle)
+- **TypeScript** (strict mode planned; currently partial)
 - **Tailwind CSS** for styling
 - **Framer Motion** for animations
 - **Socket.IO Client** for real-time features
-- **React Query** for data fetching
-- **Zustand** for state management
+- **React Query** for server state
+- **Zustand** for in-session game state & realtime diff/snapshot layer
 
 ### Backend
-- **Node.js** with **Express.js**
-- **Socket.IO** for WebSocket connections
-- **Firebase Admin SDK** for authentication and database
-- **OpenAI API** for AI features
-- **PDF-lib** for report generation
-- **Stripe** for payments (rewards store)
-- **Nodemailer** for email delivery
+- **Node.js (Express)** REST + WebSocket gateway
+- **Socket.IO** realtime session + lock coordination
+- **OpenAI API** (game customization & reporting)
+- **PDF-lib** report generation
+- **Nodemailer** (email hooks - optional)
+- (Pluggable) Persistence: currently in-memory + mock Firebase shim; Postgres adapter planned
 
-### Database & Services
-- **Firebase Firestore** - Main database
-- **Firebase Auth** - User authentication
-- **Firebase Storage** - File storage
-- **Firebase Realtime Database** - Game state
-- **OpenAI GPT-4** - AI customization and reports
+### Data & Services (Current State)
+- **In-memory store** (sessions, analytics metrics)
+- **Mock Firebase layer** (placeholder – prints to console)
+- **OpenAI** (optional; skip if key absent)
+- Planned: Postgres (Railway) + migrator, Redis (ephemeral locks), n8n for analytics ETL
 
 ## 🚀 Quick Start
 
 ### Prerequisites
 - Node.js 18+ and npm
-- Firebase project with Firestore, Auth, and Storage enabled
-- OpenAI API key
-- Stripe account (for rewards store)
+- (Optional) OpenAI API key for AI customization/report text
+- (Optional) SMTP creds for outbound email (reports)
 
 ### Installation
 
@@ -92,7 +89,7 @@ npm run setup
 2. **Environment setup:**
 ```bash
 cp .env.example .env
-# Fill in your API keys and Firebase config
+# Fill in only what you need (OPENAI_API_KEY optional). Leave Firebase/Stripe empty for now.
 ```
 
 3. **Start development servers:**
@@ -102,8 +99,7 @@ npm run dev
 
 The platform will be available at:
 - Frontend: http://localhost:3000
-- Backend API: http://localhost:5000
-- Socket.IO: http://localhost:5000
+- Backend API + Socket.IO: http://localhost:3001
 
 ## 🎮 Game Flow
 
@@ -179,37 +175,59 @@ The platform will be available at:
 
 ## 🌍 Deployment
 
-### Production Environment
-- Frontend: Vercel/Netlify with CDN
-- Backend: Railway/Heroku with auto-scaling
-- Database: Firebase (automatically scaled)
-- File Storage: Firebase Storage with CDN
-- Monitoring: Firebase Analytics + Custom dashboards
+### Production Environment (Recommended Minimal)
+- Backend API + Realtime: Railway (Node 18)
+- Frontend: Vercel (build with `npm run build` inside `client`)
+- Database: Postgres on Railway (planned) or stay in-memory for demos
+- Object/File: (Future) S3 / R2
+- Observability: Railway logs + simple custom metrics endpoints
 
 ### Environment Variables
 ```bash
-# Firebase
-FIREBASE_PROJECT_ID=your-project-id
-FIREBASE_PRIVATE_KEY=your-private-key
-FIREBASE_CLIENT_EMAIL=your-client-email
-
-# OpenAI
-OPENAI_API_KEY=your-openai-key
-
-# Stripe
-STRIPE_SECRET_KEY=your-stripe-key
-STRIPE_WEBHOOK_SECRET=your-webhook-secret
-
-# Email
-SMTP_HOST=your-smtp-host
-SMTP_USER=your-smtp-user
-SMTP_PASS=your-smtp-password
-
-# App
+# Core
 NODE_ENV=production
-PORT=5000
-CLIENT_URL=https://your-domain.com
+PORT=3001
+CLIENT_URL=https://your-frontend-domain (or local dev URL)
+
+# (Optional) OpenAI
+OPENAI_API_KEY=sk-...
+
+# (Optional) Email
+SMTP_HOST=
+SMTP_USER=
+SMTP_PASS=
+
+# (Future) Database
+DATABASE_URL=postgresql://...
 ```
+
+### Deploying Backend to Railway
+1. Push repo to GitHub.
+2. Create new Railway service from the repo root.
+3. Railway detects Node. It will run `npm install` then `npm run build` (we override build to a no-op so server deploy is fast).
+4. Start command uses `npm start` (serves Express + Socket.IO).
+5. Set env vars: `PORT=3001`, `CLIENT_URL=https://<your-frontend-domain>` plus any optional keys.
+6. Redeploy – health check at `/health` should return JSON.
+
+If you want to pre-build the frontend inside the same container (not recommended for scale):
+1. Move `client` devDependencies (vite, tailwind, etc.) into `dependencies` OR add `.npmrc` with `include=dev` (pnpm) / use `NPM_CONFIG_INCLUDE=dev`.
+2. Change root `build` script back to `cd client && npm run build`.
+3. Serve `client/dist` statically via Express or a CDN.
+
+### Deploying Frontend (Vercel)
+1. Import GitHub repo in Vercel, set root directory to `client`.
+2. Build command: `npm run build` (Vercel auto installs dev deps).
+3. Output directory: `dist`.
+4. Set `VITE_API_BASE=https://your-railway-domain` in Vercel Project Env.
+5. Deploy – confirm network requests succeed and Socket.IO connects.
+
+### Common Deployment Issue: `vite: not found`
+Cause: Hosting platform skipped devDependencies (where Vite lives). Fix options:
+- Easiest: Deploy frontend separately (Vercel) and keep backend build a no-op (current setup).
+- Or: Move `vite` + related plugins from `devDependencies` to `dependencies` in `client/package.json` (slower install) and restore build script.
+- Or: Force install dev deps by setting `NPM_CONFIG_INCLUDE=dev=true` (if supported) before build.
+
+Current repo configuration chooses separate deployments for faster backend boot and lean container.
 
 ## 📈 Roadmap
 
