@@ -6,24 +6,16 @@ import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
 
-// Import routes (will be created step by step)
+// Synchronous (eager) route imports for production reliability (lazy loading caused 404 races on Railway)
 let authRoutes, gameRoutes, lobbyRoutes, analyticsRoutes, reportsRoutes, rewardsRoutes, dashboardRoutes, nightfallRoutes;
-
-// Lazy import routes to avoid circular dependencies
-const loadRoutes = async () => {
-  try {
-    authRoutes = (await import('./routes/auth.js')).default;
-    gameRoutes = (await import('./routes/games.js')).default;
-    lobbyRoutes = (await import('./routes/lobby.js')).default;
-    analyticsRoutes = (await import('./routes/analytics.js')).default;
-    reportsRoutes = (await import('./routes/reports.js')).default;
-    rewardsRoutes = (await import('./routes/rewards.js')).default;
-    dashboardRoutes = (await import('./routes/dashboard.js')).default;
-  nightfallRoutes = (await import('./routes/nightfall.js')).default;
-  } catch (error) {
-    console.warn('Some routes not available yet:', error.message);
-  }
-};
+try { authRoutes = (await import('./routes/auth.js')).default } catch {}
+try { gameRoutes = (await import('./routes/games.js')).default } catch {}
+try { lobbyRoutes = (await import('./routes/lobby.js')).default } catch {}
+try { analyticsRoutes = (await import('./routes/analytics.js')).default } catch {}
+try { reportsRoutes = (await import('./routes/reports.js')).default } catch {}
+try { rewardsRoutes = (await import('./routes/rewards.js')).default } catch {}
+try { dashboardRoutes = (await import('./routes/dashboard.js')).default } catch {}
+try { nightfallRoutes = (await import('./routes/nightfall.js')).default } catch {}
 
 // Import services
 import { initializeFirebase } from './services/firebase.js';
@@ -190,10 +182,8 @@ app.get('/health', (req, res) => {
   });
 });
 
-// API Routes (load after routes are imported)
-const setupRoutes = async () => {
-  await loadRoutes();
-  // Track which route groups loaded for diagnostics
+// Eager mount API routes
+const setupRoutes = () => {
   routeStatus.auth = !!authRoutes;
   routeStatus.games = !!gameRoutes;
   routeStatus.lobby = !!lobbyRoutes;
@@ -209,20 +199,10 @@ const setupRoutes = async () => {
   if (analyticsRoutes) app.use('/api/analytics', analyticsRoutes);
   if (reportsRoutes) app.use('/api/reports', reportsRoutes);
   if (rewardsRoutes) app.use('/api/rewards', rewardsRoutes);
-  if (dashboardRoutes) {
-    console.log('📊 Dashboard routes loaded successfully');
-    app.use('/api/dashboard', dashboardRoutes);
-  } else {
-    console.warn('⚠️ Dashboard routes not available');
-  }
-  if (nightfallRoutes) {
-    console.log('🛰️ Nightfall routes loaded successfully');
-    app.use('/api/nightfall', nightfallRoutes);
-  } else {
-    console.warn('⚠️ Nightfall routes not available');
-  }
+  if (dashboardRoutes) app.use('/api/dashboard', dashboardRoutes);
+  if (nightfallRoutes) app.use('/api/nightfall', nightfallRoutes);
 
-  console.log('✅ API routes loaded successfully', routeStatus);
+  console.log('✅ API routes mounted (eager)', routeStatus);
 };
 
 // Initialize services and start server
@@ -230,8 +210,8 @@ const initializeServer = async () => {
   // Initialize Firebase
   initializeFirebase();
   
-  // Setup routes
-  await setupRoutes();
+  // Setup routes (now synchronous)
+  setupRoutes();
   
   // Initialize game engine
   const { GameEngine } = await import('./services/gameEngine.js').catch(() => ({ GameEngine: null }));
@@ -279,7 +259,17 @@ app.use((err, req, res, next) => {
   });
 });
 
-// Handle 404
+// Debug fallthrough markers for dashboard & nightfall (helps remotely verify matcher)
+app.use((req,res,next) => {
+  if(req.originalUrl.startsWith('/api/dashboard')) {
+    lastRequests.push({ ts:new Date().toISOString(), method:req.method, path:req.originalUrl, debug:'dashboard-fallthrough' });
+  } else if(req.originalUrl.startsWith('/api/nightfall')) {
+    lastRequests.push({ ts:new Date().toISOString(), method:req.method, path:req.originalUrl, debug:'nightfall-fallthrough' });
+  }
+  next();
+});
+
+// Handle 404 (keep last)
 app.use('*', (req, res) => {
   res.status(404).json({ error: 'Route not found' });
 });
