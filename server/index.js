@@ -50,6 +50,23 @@ const io = new SocketServer(server, {
 
 const PORT = process.env.PORT || 3001;
 
+// Track which major route groups loaded (diagnostics)
+const routeStatus = {
+  auth: false,
+  games: false,
+  lobby: false,
+  analytics: false,
+  reports: false,
+  rewards: false,
+  dashboard: false,
+  nightfall: false
+};
+
+// Early diagnostic endpoint (always present even before dynamic route load)
+app.get('/health/routes', (req,res) => {
+  res.json({ success: true, routes: routeStatus, commit: process.env.RAILWAY_GIT_COMMIT_SHA || process.env.COMMIT_HASH || null });
+});
+
 // Initialize Firebase
 initializeFirebase();
 
@@ -97,10 +114,11 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Health check endpoint
 app.get('/health', (req, res) => {
-  res.status(200).json({ 
-    status: 'healthy', 
+  res.status(200).json({
+    status: 'healthy',
     timestamp: new Date().toISOString(),
-    version: '1.0.0'
+    version: '1.0.0',
+    commit: process.env.RAILWAY_GIT_COMMIT_SHA || process.env.COMMIT_HASH || null
   });
 });
 
@@ -108,16 +126,14 @@ app.get('/health', (req, res) => {
 const setupRoutes = async () => {
   await loadRoutes();
   // Track which route groups loaded for diagnostics
-  const routeStatus = {
-    auth: !!authRoutes,
-    games: !!gameRoutes,
-    lobby: !!lobbyRoutes,
-    analytics: !!analyticsRoutes,
-    reports: !!reportsRoutes,
-    rewards: !!rewardsRoutes,
-    dashboard: !!dashboardRoutes,
-    nightfall: !!nightfallRoutes
-  };
+  routeStatus.auth = !!authRoutes;
+  routeStatus.games = !!gameRoutes;
+  routeStatus.lobby = !!lobbyRoutes;
+  routeStatus.analytics = !!analyticsRoutes;
+  routeStatus.reports = !!reportsRoutes;
+  routeStatus.rewards = !!rewardsRoutes;
+  routeStatus.dashboard = !!dashboardRoutes;
+  routeStatus.nightfall = !!nightfallRoutes;
 
   if (authRoutes) app.use('/api/auth', authRoutes);
   if (gameRoutes) app.use('/api/games', gameRoutes);
@@ -137,11 +153,6 @@ const setupRoutes = async () => {
   } else {
     console.warn('⚠️ Nightfall routes not available');
   }
-
-  // Expose diagnostic endpoint early
-  app.get('/health/routes', (req,res) => {
-    res.json({ success:true, routes: routeStatus });
-  });
 
   console.log('✅ API routes loaded successfully', routeStatus);
 };
