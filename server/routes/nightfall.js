@@ -52,6 +52,23 @@ const requireKey = (req,res,next) => {
   next()
 }
 
+// Root diagnostic to confirm router is mounted in production
+router.get('/', (req,res) => {
+  res.json({
+    success: true,
+    service: 'nightfall',
+    note: 'If you can see this, /api/nightfall base path is mounted.',
+    endpoints: [
+      'POST /api/nightfall/sessions',
+      'GET /api/nightfall/sessions',
+      'POST /api/nightfall/sessions/:id/join',
+      'POST /api/nightfall/join',
+      'GET /api/nightfall/sessions/:id/state',
+      'GET /api/nightfall/sessions/:id/metrics'
+    ]
+  })
+})
+
 // Create a new Nightfall session
 router.post('/sessions', requireKey, async (req,res) => {
   try {
