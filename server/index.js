@@ -67,6 +67,34 @@ app.get('/health/routes', (req,res) => {
   res.json({ success: true, routes: routeStatus, commit: process.env.RAILWAY_GIT_COMMIT_SHA || process.env.COMMIT_HASH || null });
 });
 
+// Deep route inspection (debug). Lists registered HTTP method+path combos.
+// NOTE: This is for troubleshooting only. Optionally gate with env var in future.
+app.get('/health/express-routes', (req,res) => {
+  const seen = []
+  const extract = (stack, prefix='') => {
+    stack.forEach(layer => {
+      if(layer.route && layer.route.path) {
+        const methods = Object.keys(layer.route.methods || {}).filter(m=>layer.route.methods[m]).map(m=>m.toUpperCase())
+        seen.push({ methods, path: prefix + layer.route.path })
+      } else if(layer.name === 'router' && layer.handle && layer.handle.stack) {
+        // Try to derive the mount path from the layer.regexp (best-effort)
+        let mount = ''
+        if(layer.regexp && layer.regexp.source) {
+          const match = layer.regexp.source
+            .replace('(?=\/|$)', '')
+            .replace('^\\/', '/')
+            .replace('\\/?', '')
+            .replace(/\\\/?$/,'')
+          if(match && match !== '^' && match !== '(?=\/|$)') mount = match
+        }
+        extract(layer.handle.stack, prefix + mount)
+      }
+    })
+  }
+  if(app._router && app._router.stack) extract(app._router.stack)
+  res.json({ success:true, count: seen.length, routes: seen })
+})
+
 // Initialize Firebase
 initializeFirebase();
 
