@@ -84,6 +84,24 @@ app.get('/health/routes', (req,res) => {
   res.json({ success: true, routes: routeStatus, commit: process.env.RAILWAY_GIT_COMMIT_SHA || process.env.COMMIT_HASH || null });
 });
 
+// Raw express stack dump (minimal) for API route debugging (temporary)
+app.get('/health/routes-raw', (req,res) => {
+  try {
+    const stack = (app._router?.stack||[]).filter(l=>l.route).map(l=>({
+      path: l.route.path,
+      methods: Object.keys(l.route.methods||{}).filter(m=>l.route.methods[m])
+    }))
+    res.json({ success:true, count: stack.length, stack })
+  } catch (e) {
+    res.status(500).json({ success:false, error: e.message })
+  }
+});
+
+// Simple echo endpoint under /api to verify prefix matching in prod
+app.all('/api/_debug/echo', (req,res) => {
+  res.json({ success:true, msg:'api prefix reachable', method: req.method, url: req.originalUrl })
+});
+
 // Recent request log (sanitized)
 app.get('/health/requests', (req,res) => {
   res.json({ success:true, count: lastRequests.length, requests: lastRequests.slice(-50) });

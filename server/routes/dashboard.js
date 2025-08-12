@@ -8,6 +8,25 @@ import { DataCollectionService } from '../services/dataCollectionService.js'
 const router = express.Router()
 const dataService = new DataCollectionService()
 
+// Root diagnostic (helps confirm router mount in production)
+router.get('/', (req,res) => {
+  res.json({
+    success: true,
+    service: 'dashboard',
+    note: 'If you see this, /api/dashboard base router is mounted.',
+    endpoints: [
+      'GET /api/dashboard/reports',
+      'GET /api/dashboard/reports/:sessionId',
+      'POST /api/dashboard/save-report',
+      'POST /api/dashboard/submit-metrics',
+      'POST /api/dashboard/submit-feedback',
+      'GET /api/dashboard/analytics',
+      'POST /api/dashboard/retry-workflows',
+      'GET /api/dashboard/health'
+    ]
+  })
+})
+
 /**
  * Authentication middleware (simplified for demo)
  * In production, use proper JWT validation
