@@ -36,7 +36,7 @@ async function createSession({ title='Operation Nightfall', hostId='host_demo', 
   // Persist session shell in DB if available
   const r = await ensureRepo()
   if(r?.createSessionRecord) {
-    try { await r.createSessionRecord({ title, hostId, maxPlayers, joinCode }) } catch (e) { /* ignore */ }
+    try { await r.createSessionRecord({ id: gs.id, title, hostId, maxPlayers, joinCode }) } catch (e) { /* ignore */ }
   }
   return gs
 }

@@ -1,14 +1,18 @@
 import { query } from './db.js'
 import { randomUUID } from 'crypto'
 
-export async function createSessionRecord({ title, hostId, maxPlayers, joinCode }) {
-  const id = randomUUID()
+// Create a session record. If an id is supplied (preferred) we use it so that
+// the in-memory GameSession id matches the persisted row. This lets us later
+// hydrate or look up by the same id instead of having divergent identifiers.
+export async function createSessionRecord({ id, title, hostId, maxPlayers, joinCode }) {
+  const finalId = id || randomUUID()
   await query(
     `INSERT INTO sessions (id, join_code, status, latest_snapshot, snapshot_version, snapshot_checksum)
-     VALUES ($1,$2,'lobby', $3, $4, $5)`,
-    [id, joinCode, null, null, null]
+     VALUES ($1,$2,'lobby', $3, $4, $5)
+     ON CONFLICT (id) DO NOTHING`,
+    [finalId, joinCode, null, null, null]
   )
-  return { id, joinCode }
+  return { id: finalId, joinCode }
 }
 
 export async function addPlayer({ sessionId, playerId, playerName, role }) {
