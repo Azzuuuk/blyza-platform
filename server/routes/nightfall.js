@@ -81,9 +81,54 @@ router.post('/sessions', requireKey, async (req,res) => {
 })
 
 // List active sessions
-router.get('/sessions', (req,res) => {
-  const list = Array.from(sessions.values()).map(s=>s.toJSON())
-  res.json({ success:true, sessions: list })
+router.get('/sessions', async (req,res) => {
+  try {
+    // Runtime sessions (current process memory)
+    const runtime = Array.from(sessions.values()).map(s => ({
+      ...s.toJSON(),
+      joinCode: s.joinCode,
+      runtime: true
+    }))
+    // Persisted sessions (DB) if repo available
+    let persisted = []
+    const r = await ensureRepo()
+    if (r?.listSessions) {
+      try {
+        const rows = await r.listSessions(100)
+        persisted = rows.map(row => ({
+          id: row.id,
+          joinCode: row.join_code,
+            // Minimal fields until we hydrate full snapshot later
+          status: row.status,
+          createdAt: row.created_at,
+          updatedAt: row.updated_at,
+          persisted: true
+        }))
+      } catch (e) {
+        // ignore db errors for now
+      }
+    }
+    // Merge by id to avoid duplicates (prefer runtime details if present)
+    const byId = new Map()
+    for (const p of persisted) byId.set(p.id, p)
+    for (const rts of runtime) byId.set(rts.id, { ...byId.get(rts.id), ...rts })
+    const combined = Array.from(byId.values()).sort((a,b)=> (a.createdAt||'').localeCompare(b.createdAt||''))
+    res.json({ success:true, sessions: combined, counts: { runtime: runtime.length, persisted: persisted.length } })
+  } catch (e) {
+    res.status(500).json({ success:false, error: e.message })
+  }
+})
+
+// Direct DB session list (debug) – does not include runtime-only sessions
+router.get('/sessions/db', async (req,res) => {
+  const r = await ensureRepo()
+  if(!r?.listSessions) return res.status(503).json({ success:false, error:'session repo unavailable' })
+  try {
+    const rows = await r.listSessions(100)
+    res.json({ success:true, sessions: rows })
+  } catch (e) {
+    res.status(500).json({ success:false, error: e.message })
+  }
 })
 
 // Join a session (adds player server-side; realtime join still via socket event)
