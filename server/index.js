@@ -62,9 +62,31 @@ const routeStatus = {
   nightfall: false
 };
 
+// Capture recent requests for troubleshooting (in-memory, volatile)
+const lastRequests = [];
+app.use((req,res,next) => {
+  try {
+    lastRequests.push({
+      ts: new Date().toISOString(),
+      method: req.method,
+      path: req.path,
+      originalUrl: req.originalUrl,
+      host: req.headers.host,
+      ua: req.headers['user-agent']?.slice(0,60)
+    });
+    if(lastRequests.length > 200) lastRequests.shift();
+  } catch {}
+  next();
+});
+
 // Early diagnostic endpoint (always present even before dynamic route load)
 app.get('/health/routes', (req,res) => {
   res.json({ success: true, routes: routeStatus, commit: process.env.RAILWAY_GIT_COMMIT_SHA || process.env.COMMIT_HASH || null });
+});
+
+// Recent request log (sanitized)
+app.get('/health/requests', (req,res) => {
+  res.json({ success:true, count: lastRequests.length, requests: lastRequests.slice(-50) });
 });
 
 // Deep route inspection (debug). Lists registered HTTP method+path combos.
