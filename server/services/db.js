@@ -2,14 +2,38 @@ import pkg from 'pg'
 const { Pool } = pkg
 
 let pool
+let lastDbVarUsed = null
+
+function buildFromDiscreteEnv(){
+  const { PGUSER, PGPASSWORD, PGHOST, PGPORT, PGDATABASE } = process.env
+  if(PGHOST && PGDATABASE){
+    const user = PGUSER || 'postgres'
+    const pass = PGPASSWORD ? encodeURIComponent(PGPASSWORD) : ''
+    const auth = pass ? `${encodeURIComponent(user)}:${pass}@` : ''
+    const host = PGHOST
+    const port = PGPORT || 5432
+    return `postgres://${auth}${host}:${port}/${PGDATABASE}`
+  }
+  return null
+}
 
 export function getPool() {
   if (!pool) {
-    const connectionString = process.env.DATABASE_URL
-    if (!connectionString) {
-      throw new Error('DATABASE_URL not set')
+    const candidates = [
+      ['DATABASE_URL', process.env.DATABASE_URL],
+      ['RAILWAY_DATABASE_URL', process.env.RAILWAY_DATABASE_URL],
+      ['POSTGRES_URL', process.env.POSTGRES_URL],
+      ['SUPABASE_DB_URL', process.env.SUPABASE_DB_URL],
+      ['DISCRETE_VARS', buildFromDiscreteEnv()]
+    ]
+    const found = candidates.find(([k,v]) => v)
+    if(!found){
+      throw new Error('No database connection string env var found (tried DATABASE_URL, RAILWAY_DATABASE_URL, POSTGRES_URL, SUPABASE_DB_URL, discrete PG vars)')
     }
-    pool = new Pool({ connectionString, max: 5 })
+    lastDbVarUsed = found[0]
+    const connectionString = found[1]
+    pool = new Pool({ connectionString, max: parseInt(process.env.PG_POOL_MAX)||5 })
+    console.log(`📦 DB pool created using ${lastDbVarUsed}`)
   }
   return pool
 }
@@ -38,5 +62,13 @@ export async function healthCheck() {
   } catch (e) {
     console.error('DB health check failed', e.message)
     return false
+  }
+}
+
+export function dbDiagnostics(){
+  return {
+    poolCreated: !!pool,
+    lastDbVarUsed,
+    maxClients: pool?.options?.max || null
   }
 }

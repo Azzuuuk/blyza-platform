@@ -112,7 +112,15 @@ router.get('/sessions', async (req,res) => {
     const byId = new Map()
     for (const p of persisted) byId.set(p.id, p)
     for (const rts of runtime) byId.set(rts.id, { ...byId.get(rts.id), ...rts })
-    const combined = Array.from(byId.values()).sort((a,b)=> (a.createdAt||'').localeCompare(b.createdAt||''))
+    const combined = Array.from(byId.values()).map(s => ({
+      ...s,
+      createdAt: s.createdAt || s.created_at || null,
+      updatedAt: s.updatedAt || s.updated_at || null
+    })).sort((a,b)=> {
+      const ta = a.createdAt ? new Date(a.createdAt).getTime() : 0
+      const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0
+      return tb - ta // newest first
+    })
     res.json({ success:true, sessions: combined, counts: { runtime: runtime.length, persisted: persisted.length } })
   } catch (e) {
     res.status(500).json({ success:false, error: e.message })

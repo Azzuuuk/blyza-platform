@@ -182,6 +182,17 @@ app.get('/health', (req, res) => {
   });
 });
 
+// DB health (best-effort; does not crash if db module missing)
+app.get('/health/db', async (req,res) => {
+  try {
+    const { healthCheck, dbDiagnostics } = await import('./services/db.js')
+    const ok = await healthCheck()
+    res.json({ success:true, healthy: ok, diagnostics: dbDiagnostics() })
+  } catch (e) {
+    res.status(200).json({ success:false, error: e.message })
+  }
+})
+
 // Eager mount API routes
 const setupRoutes = () => {
   routeStatus.auth = !!authRoutes;
