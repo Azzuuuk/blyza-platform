@@ -107,7 +107,18 @@ app.get('/health', (req, res) => {
 // API Routes (load after routes are imported)
 const setupRoutes = async () => {
   await loadRoutes();
-  
+  // Track which route groups loaded for diagnostics
+  const routeStatus = {
+    auth: !!authRoutes,
+    games: !!gameRoutes,
+    lobby: !!lobbyRoutes,
+    analytics: !!analyticsRoutes,
+    reports: !!reportsRoutes,
+    rewards: !!rewardsRoutes,
+    dashboard: !!dashboardRoutes,
+    nightfall: !!nightfallRoutes
+  };
+
   if (authRoutes) app.use('/api/auth', authRoutes);
   if (gameRoutes) app.use('/api/games', gameRoutes);
   if (lobbyRoutes) app.use('/api/lobby', lobbyRoutes);
@@ -126,8 +137,13 @@ const setupRoutes = async () => {
   } else {
     console.warn('⚠️ Nightfall routes not available');
   }
-  
-  console.log('✅ API routes loaded successfully');
+
+  // Expose diagnostic endpoint early
+  app.get('/health/routes', (req,res) => {
+    res.json({ success:true, routes: routeStatus });
+  });
+
+  console.log('✅ API routes loaded successfully', routeStatus);
 };
 
 // Initialize services and start server
