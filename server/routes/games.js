@@ -2,6 +2,8 @@ import express from 'express';
 import { gameTemplates } from '../data/gameTemplates.js';
 import { AICustomizer } from '../services/aiCustomizer.js';
 import { authenticateUser } from '../middleware/auth.js';
+// Minimal points awarding (reuse existing MVP repo DB-backed points & rewards system)
+import { addUserIfMissing, adjustPoints } from '../services/mvpRepo.js';
 
 const router = express.Router();
 
@@ -130,6 +132,25 @@ router.post('/:id/customize', authenticateUser, async (req, res) => {
       success: false, 
       error: 'Failed to customize game' 
     });
+  }
+});
+
+/**
+ * @route POST /api/games/:id/scenarios
+ * @desc Generate custom scenarios for a game (AI assisted)
+ * @access Private
+ */
+router.post('/:id/scenarios', authenticateUser, async (req,res)=>{
+  try {
+    const game = gameTemplates.find(g => g.id === req.params.id);
+    if(!game) return res.status(404).json({ success:false, error:'Game not found'});
+    const { context } = req.body || {};
+    const aiCustomizer = new AICustomizer();
+    const scenarios = await aiCustomizer.generateCustomScenarios(game, context||'General company setting');
+    res.json({ success:true, scenarios });
+  } catch(e){
+    console.error('scenario generation error', e);
+    res.status(500).json({ success:false, error:'Failed to generate scenarios'});
   }
 });
 
@@ -270,11 +291,34 @@ router.post('/code-breakers/submit-results', async (req, res) => {
       console.error('❌ N8N webhook failed:', n8nError);
     }
 
+    // 🏅 Award points to each player (ONLY if an email is provided for that player).
+    // We intentionally avoid over-engineering: no extra tables, just leverage existing users & points tables.
+    // Expect optional player.email in payload. If absent, that player is skipped (cannot redeem later without an account).
+    const playersAwarded = [];
+    if (Array.isArray(gameData.players)) {
+      for (const p of gameData.players) {
+        try {
+          if (!p.email) continue; // skip if we don't have an email to associate with a user account
+          const user = await addUserIfMissing({ email: p.email, name: p.name });
+          if (!user) continue;
+          // Simple formula: direct score, fallback to 100 if missing, optionally clamp
+            const rawPoints = typeof p.score === 'number' ? p.score : 100;
+          const points = Math.max(1, Math.min(rawPoints, 500)); // clamp 1..500 to prevent abuse
+          await adjustPoints({ userId: user.id, delta: points, reason: 'game_session', sessionId: gameData.sessionId });
+          playersAwarded.push({ email: p.email, name: p.name, points });
+        } catch (e) {
+          console.warn('award_points_failed', p?.email, e.message);
+        }
+      }
+    }
+
     res.json({
       success: true,
       message: 'Game results submitted successfully',
       gameId: gameResults.id,
-      analysisUrl: `/analysis/${gameResults.id}`
+      analysisUrl: `/analysis/${gameResults.id}`,
+      playersAwarded,
+      note: playersAwarded.length === 0 ? 'Include player.email in submission to award redeemable points.' : undefined
     });
 
   } catch (error) {

@@ -23,6 +23,7 @@ const GameSimulation = lazy(() => import('./pages/GameSimulationNew'))
 
 // Games
 const CodeBreakersTeamGame = lazy(() => import('./games/CodeBreakers/CodeBreakersTeamGame'))
+import ProtectedRoute from './components/ProtectedRoute'
 import PageLoader from './components/PageLoader'
 
 // Create a client
@@ -45,8 +46,8 @@ function RoutesWithBoundary() {
             <Route path="/game-intent" element={<GameIntent />} />
             <Route path="/games" element={<GameCatalog />} />
             <Route path="/games/:gameId/customize" element={<GameCustomization />} />
-            <Route path="/lobby/create" element={<LobbyCreation />} />
-            <Route path="/lobby/:lobbyId" element={<LobbyPage />} />
+            <Route path="/lobby/create" element={<ProtectedRoute><LobbyCreation /></ProtectedRoute>} />
+            <Route path="/lobby/:lobbyId" element={<ProtectedRoute><LobbyPage /></ProtectedRoute>} />
             <Route path="/game/simulation" element={<GameSimulation />} />
             <Route path="/game/analysis" element={<GameAnalysis />} />
             <Route path="/game/:sessionId" element={<GameplayPage />} />
@@ -57,14 +58,14 @@ function RoutesWithBoundary() {
             <Route path="/results" element={<ResultsPage />} />
             <Route path="/rewards" element={<RewardsStore />} />
             {/* Join game aliases */}
-            <Route path="/join/:roomCode?" element={<JoinGame />} />
-            <Route path="/join-game" element={<JoinGame />} />
-            <Route path="/dashboard" element={<ManagerDashboard />} />
+            <Route path="/join/:roomCode?" element={<ProtectedRoute><JoinGame /></ProtectedRoute>} />
+            <Route path="/join-game" element={<ProtectedRoute><JoinGame /></ProtectedRoute>} />
+            <Route path="/dashboard" element={<ProtectedRoute><ManagerDashboard /></ProtectedRoute>} />
             
             {/* Game Routes */}
-            <Route path="/games/code-breakers" element={<CodeBreakersTeamGame />} />
-            <Route path="/games/code-breakers/play" element={<CodeBreakersTeamGame />} />
-            <Route path="/games/code-breakers/team" element={<CodeBreakersTeamGame />} />
+            <Route path="/games/code-breakers" element={<ProtectedRoute><CodeBreakersTeamGame /></ProtectedRoute>} />
+            <Route path="/games/code-breakers/play" element={<ProtectedRoute><CodeBreakersTeamGame /></ProtectedRoute>} />
+            <Route path="/games/code-breakers/team" element={<ProtectedRoute><CodeBreakersTeamGame /></ProtectedRoute>} />
             
             {/* Test Route */}
             <Route path="/test" element={<div style={{padding: '20px', color: 'white', background: '#1a1a2e', minHeight: '100vh'}}>✅ Test Route Working!</div>} />

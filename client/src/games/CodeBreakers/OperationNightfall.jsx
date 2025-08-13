@@ -275,6 +275,22 @@ const OperationNightfall = () => {
   const handleMissionComplete = () => {
     setGamePhase('completed')
     addSystemMessage('🏁 OPERATION NIGHTFALL COMPLETE')
+    try {
+      const results = buildMissionResults({ sessionId, startTime })
+      if(results) setMissionResults(results)
+      const authState = JSON.parse(localStorage.getItem('blyza-auth')||'{}')
+      const user = authState?.state?.user
+      const isManager = user && (user.role === 'manager' || user.role === 'admin')
+      setTimeout(()=>{
+        if(isManager){
+          navigate('/manager-feedback', { state: { gameData: results, gameTitle: 'Operation Nightfall', teamAspect: 'problem-solving' } })
+        } else {
+          navigate('/results', { state: { gameData: results } })
+        }
+      }, 1200)
+    } catch(e) {
+      setTimeout(()=>navigate('/results', { state:{ sessionId }}), 1500)
+    }
   }
 
   // ⏰ Timer Effect (moved after function declarations)

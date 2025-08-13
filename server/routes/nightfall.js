@@ -260,6 +260,71 @@ router.post('/sessions/:id/events', requireKey, async (req,res) => {
   }
 })
 
+// Manual snapshot persistence (POST full snapshot) - fallback for clients needing to ensure durability
+router.post('/sessions/:id/snapshot', requireKey, async (req,res) => {
+  const { id } = req.params
+  const { snapshot } = req.body || {}
+  if(!snapshot || typeof snapshot !== 'object') return res.status(400).json({ success:false, error:'snapshot object required' })
+  try {
+    const { persistNightfallSnapshot } = await import('../services/nightfallPersistence.js')
+    await persistNightfallSnapshot(id, snapshot)
+    res.json({ success:true })
+  } catch (e) {
+    res.status(500).json({ success:false, error:e.message })
+  }
+})
+
+// Session resume token issuance (stateless basic implementation)
+router.post('/sessions/:id/resume-token', requireKey, async (req,res) => {
+  const { id } = req.params
+  const { playerId } = req.body || {}
+  if(!playerId) return res.status(400).json({ success:false, error:'playerId required' })
+  // For now the token is just a signed-ish opaque structure (no JWT dependency reuse for simplicity)
+  const secret = process.env.JWT_SECRET || 'dev-secret'
+  const payload = Buffer.from(JSON.stringify({ s:id, p:playerId, t:Date.now() })).toString('base64url')
+  // Very lightweight HMAC substitute (not cryptographically strong; upgrade later)
+  const h = await (async ()=>{
+    const { createHash } = await import('crypto')
+    return createHash('sha256').update(payload+secret).digest('base64url').slice(0,22)
+  })()
+  const token = `${payload}.${h}`
+  res.json({ success:true, token, expiresInMs: 6*60*60*1000 })
+})
+
+// Validate a resume token (client can check before attempting reconnect flow)
+router.post('/resume/validate', requireKey, async (req,res) => {
+  const { token } = req.body || {}
+  if(!token) return res.status(400).json({ success:false, error:'token required' })
+  try {
+    const secret = process.env.JWT_SECRET || 'dev-secret'
+    const [payload, sig] = token.split('.')
+    if(!payload || !sig) return res.status(400).json({ success:false, error:'malformed token' })
+    const { createHash } = await import('crypto')
+    const expect = createHash('sha256').update(payload+secret).digest('base64url').slice(0,22)
+    if(sig !== expect) return res.status(401).json({ success:false, error:'invalid signature' })
+    const decoded = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'))
+    if(Date.now() - decoded.t > 6*60*60*1000) return res.status(401).json({ success:false, error:'expired' })
+    return res.json({ success:true, sessionId: decoded.s, playerId: decoded.p })
+  } catch (e) {
+    res.status(400).json({ success:false, error:'invalid token' })
+  }
+})
+
+// Multi-session analytics aggregation (DB backed)
+router.get('/analytics/multi/summary', requireKey, async (req,res) => {
+  const r = await ensureRepo()
+  if(!r?.aggregateSessionEventCounts) return res.status(503).json({ success:false, error:'aggregation unavailable' })
+  try {
+    const hours = parseInt(req.query.hours)||24
+    const sessionCounts = await r.aggregateSessionEventCounts({ sinceHours: hours })
+    const distribution = r.recentEventTypeDistribution ? await r.recentEventTypeDistribution({ sinceMinutes: (hours*60) }) : []
+    const active = r.activeSessionsSince ? await r.activeSessionsSince({ sinceMinutes: hours*60 }) : []
+    res.json({ success:true, hours, sessions: sessionCounts.length, sessionCounts, distribution, activeSessions: active })
+  } catch (e) {
+    res.status(500).json({ success:false, error: e.message })
+  }
+})
+
 // TODO: scheduled cleanup for stale sessions (placeholder). In production deploy, use a cron or external scheduler.
 // For now, expose a manual maintenance endpoint gated by API key.
 router.post('/maintenance/cleanup', requireKey, async (req,res) => {

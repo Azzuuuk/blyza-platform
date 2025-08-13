@@ -9,8 +9,9 @@ export const useAuthStore = create(
   persist(
     (set, get) => ({
       // User state
-      user: null,
-      isAuthenticated: false,
+  user: null,
+  token: null,
+  isAuthenticated: false,
       loading: false,
       error: null,
       
@@ -22,11 +23,8 @@ export const useAuthStore = create(
       },
       
       // Actions
-      setUser: (user) => set({ 
-        user, 
-        isAuthenticated: !!user,
-        error: null 
-      }),
+  setUser: (user) => set({ user, isAuthenticated: !!user, error: null }),
+  setToken: (token) => set({ token }),
       
       setLoading: (loading) => set({ loading }),
       
@@ -40,23 +38,27 @@ export const useAuthStore = create(
       login: async (credentials) => {
         set({ loading: true, error: null })
         try {
-          // This would call your actual auth API
-          const response = await fetch('/api/auth/login', {
+          const base = import.meta.env.VITE_API_BASE || 'http://localhost:3001'
+          const response = await fetch(`${base}/api/auth/login`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(credentials)
           })
           
-          if (!response.ok) throw new Error('Login failed')
+          if (!response.ok) {
+            const txt = await response.text()
+            throw new Error(`Login failed: ${txt}`)
+          }
+
+          const data = await response.json()
+          set({ user: data.user, token: data.token, isAuthenticated: true, loading: false })
+          // Background upsert to MVP user table (non-blocking)
+          try {
+            const { MvpAPI } = await import('../api/index.js')
+            await MvpAPI.upsertUser(data.user.email, data.user.name || 'Manager')
+          } catch(_e){}
           
-          const userData = await response.json()
-          set({ 
-            user: userData.user, 
-            isAuthenticated: true,
-            loading: false 
-          })
-          
-          return userData
+          return data
         } catch (error) {
           set({ 
             error: error.message, 
@@ -66,13 +68,35 @@ export const useAuthStore = create(
           throw error
         }
       },
+
+      signup: async (payload) => {
+        set({ loading: true, error: null })
+        try {
+          const base = import.meta.env.VITE_API_BASE || 'http://localhost:3001'
+            const response = await fetch(`${base}/api/auth/signup`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload)
+            })
+            if(!response.ok){
+              const txt = await response.text()
+              throw new Error(`Signup failed: ${txt}`)
+            }
+            const data = await response.json()
+            set({ user: data.user, token: data.token, isAuthenticated: true, loading:false })
+            try {
+              const { MvpAPI } = await import('../api/index.js')
+              await MvpAPI.upsertUser(data.user.email, data.user.name || 'Manager')
+            } catch(_e){}
+            return data
+        } catch (e){
+          set({ error: e.message, loading:false, isAuthenticated:false })
+          throw e
+        }
+      },
       
       // Logout action
-      logout: () => set({ 
-        user: null, 
-        isAuthenticated: false,
-        error: null 
-      }),
+  logout: () => set({ user: null, token: null, isAuthenticated: false, error: null }),
       
       // Clear error
       clearError: () => set({ error: null }),
@@ -84,11 +108,7 @@ export const useAuthStore = create(
     }),
     {
       name: 'blyza-auth', // localStorage key
-      partialize: (state) => ({
-        user: state.user,
-        isAuthenticated: state.isAuthenticated,
-        preferences: state.preferences
-      })
+  partialize: (state) => ({ user: state.user, token: state.token, isAuthenticated: state.isAuthenticated, preferences: state.preferences })
     }
   )
 )

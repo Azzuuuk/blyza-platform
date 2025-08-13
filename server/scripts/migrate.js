@@ -35,8 +35,23 @@ async function run(){
   id UUID PRIMARY KEY,
   email TEXT UNIQUE,
   name TEXT,
+  password_hash TEXT,
+  org_id UUID,
   points_balance INTEGER NOT NULL DEFAULT 0,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);`,
+// Lightweight orgs & membership (optional; a user may have org_id nullable until assigned)
+`CREATE TABLE IF NOT EXISTS orgs (
+  id UUID PRIMARY KEY,
+  name TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);`,
+`CREATE TABLE IF NOT EXISTS org_members (
+  org_id UUID REFERENCES orgs(id) ON DELETE CASCADE,
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  role TEXT NOT NULL DEFAULT 'member',
+  joined_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY(org_id, user_id)
 );`,
 `CREATE TABLE IF NOT EXISTS points_transactions (
   id BIGSERIAL PRIMARY KEY,
@@ -60,6 +75,8 @@ async function run(){
   user_id UUID REFERENCES users(id) ON DELETE CASCADE,
   reward_id TEXT REFERENCES rewards(id) ON DELETE CASCADE,
   status TEXT NOT NULL DEFAULT 'pending',
+  code TEXT,
+  consumed_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );`,
 `CREATE TABLE IF NOT EXISTS reports (
@@ -68,6 +85,41 @@ async function run(){
   manager_email TEXT,
   insights JSONB,
   pdf_path TEXT,
+  pdf_size INTEGER,
+  pdf_generated_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);`
+  ,
+// Extend reports table with new flexible columns for categorization and arbitrary payload storage
+`ALTER TABLE reports ADD COLUMN IF NOT EXISTS type TEXT;`,
+`ALTER TABLE reports ADD COLUMN IF NOT EXISTS payload JSONB;`
+  ,
+`CREATE TABLE IF NOT EXISTS custom_game_templates (
+  id UUID PRIMARY KEY,
+  base_game_id TEXT,
+  title TEXT,
+  created_by UUID REFERENCES users(id) ON DELETE SET NULL,
+  customization JSONB,
+  content JSONB,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);`
+  ,
+`CREATE TABLE IF NOT EXISTS player_session_stats (
+  session_id UUID REFERENCES sessions(id) ON DELETE CASCADE,
+  player_id TEXT NOT NULL,
+  stats JSONB NOT NULL,
+  calculated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY(session_id, player_id)
+);`
+  ,
+// Generic audit log
+`CREATE TABLE IF NOT EXISTS audit_log (
+  id BIGSERIAL PRIMARY KEY,
+  user_id UUID,
+  org_id UUID,
+  action TEXT NOT NULL,
+  details JSONB,
+  ip TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );`
   ]

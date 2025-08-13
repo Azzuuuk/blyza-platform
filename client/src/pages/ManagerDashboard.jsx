@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react'
+import { ReportsAPI, GamesAPI, MvpAPI } from '../api/index.js'
+import AuthPanel from '../components/AuthPanel.jsx'
 import { Line, Bar, Radar, Doughnut } from 'react-chartjs-2'
 import {
   Chart as ChartJS,
@@ -46,15 +48,32 @@ const ManagerDashboard = () => {
   const [analytics, setAnalytics] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [sessionInput, setSessionInput] = useState('')
+  const [deepReport, setDeepReport] = useState(null)
+  const [deepLoading, setDeepLoading] = useState(false)
+  const [scenarios, setScenarios] = useState([])
+  const [scenarioLoading, setScenarioLoading] = useState(false)
+  const [templates, setTemplates] = useState([])
+  const [templateName, setTemplateName] = useState('')
+  const [templateContent, setTemplateContent] = useState('')
+  const [savingTemplate, setSavingTemplate] = useState(false)
+  const [history, setHistory] = useState({ transactions:[], redemptions:[] })
+  const [pdfGenerating, setPdfGenerating] = useState(false)
+  const [reportEmail, setReportEmail] = useState('')
+  const [reportCompany, setReportCompany] = useState('')
+  const [reportMessage, setReportMessage] = useState('')
+  const [managerBalance, setManagerBalance] = useState(null)
+  const [pdfReports, setPdfReports] = useState([])
 
   useEffect(() => {
     console.log('🚀 Dashboard component mounted')
-    // For testing - skip backend and load mock data directly
     loadMockData()
     setLoading(false)
-    
-    // Uncomment this to try backend fetch:
-    // fetchDashboardData()
+  loadMvpExtras()
+  loadPdfReports()
+    const redemptionHandler = () => refreshHistory()
+    window.addEventListener('blyza:rewards:redeemed', redemptionHandler)
+    return () => window.removeEventListener('blyza:rewards:redeemed', redemptionHandler)
   }, [])
 
   const fetchDashboardData = async () => {
@@ -107,6 +126,50 @@ const ManagerDashboard = () => {
     } finally {
       setLoading(false)
     }
+  }
+
+  const loadMvpExtras = async () => {
+    try {
+      const [tpls] = await Promise.all([
+        MvpAPI.listTemplates().catch(()=>({ templates:[] }))
+      ])
+      setTemplates(tpls.templates||[])
+      // if jwt user context not set we still can’t fetch balance-specific but leave placeholder
+      try {
+        const base = import.meta.env.VITE_API_BASE || 'http://localhost:3001'
+        const res = await fetch(`${base}/api/mvp/manager/overview`, { headers:{ 'x-api-key': import.meta.env.VITE_MVP_API_KEY||'' }})
+        if(res.ok){ const j = await res.json(); if(j.success) setManagerBalance(j.balance) }
+      } catch(_e){}
+    } catch(e){ /* silent */ }
+  }
+
+  const loadPdfReports = async () => {
+    try {
+      const email = 'manager@blyza.com'
+      const resp = await ReportsAPI.listPdf(email).catch(()=>({ reports:[] }))
+      setPdfReports(resp.reports||[])
+    } catch(_e){}
+  }
+
+  const refreshHistory = async (userId) => {
+    try {
+      const [tx, rd] = await Promise.all([
+        MvpAPI.transactions().catch(()=>({ transactions:[] })),
+        userId ? MvpAPI.redemptions(userId).catch(()=>({ redemptions:[] })) : Promise.resolve({ redemptions:[] })
+      ])
+      setHistory({ transactions: tx.transactions||[], redemptions: rd.redemptions||[] })
+    } catch(e){}
+  }
+
+  const handleSaveTemplate = async () => {
+    if(!templateName || !templateContent) return
+    setSavingTemplate(true)
+    try {
+      const resp = await MvpAPI.saveTemplate({ name: templateName, content: templateContent, author: 'manager@blyza.com' })
+      setTemplates(t=>[resp.template, ...t])
+      setTemplateName('')
+      setTemplateContent('')
+    } catch(e){ setError(e.message) } finally { setSavingTemplate(false) }
   }
 
   const loadMockData = () => {
@@ -169,6 +232,61 @@ const ManagerDashboard = () => {
       setSelectedReport(mockReports[0])
     }
     console.log('✅ Mock data loaded:', { reports: mockReports.length, analytics: mockAnalytics })
+  }
+
+  // Trigger deep report generation (server AI + analytics)
+  const handleGenerateDeepReport = async () => {
+    if(!sessionInput) return;
+    try {
+      setDeepLoading(true)
+      const resp = await ReportsAPI.deep(sessionInput)
+      setDeepReport(resp.report)
+    } catch(e){
+      setError(e.message)
+    } finally { setDeepLoading(false) }
+  }
+
+  const handleGeneratePdf = async () => {
+    if(!sessionInput) { setReportMessage('Enter session ID'); return }
+    try {
+      setPdfGenerating(true)
+      setReportMessage('Generating PDF...')
+      const blob = await ReportsAPI.generatePDF({
+        sessionId: sessionInput,
+        gameId:'generic',
+        companyInfo: reportCompany ? { name: reportCompany } : {},
+        emailSettings: reportEmail ? { sendEmail:true, recipientEmail: reportEmail } : undefined
+      })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `team-report-${sessionInput}.pdf`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      URL.revokeObjectURL(url)
+      setReportMessage(reportEmail ? 'PDF downloaded & email requested (if SMTP configured)' : 'PDF downloaded')
+    } catch(e){
+      setReportMessage(`PDF failed: ${e.message}`)
+    } finally { setPdfGenerating(false) }
+  }
+
+  const handleComputeStats = async () => {
+    if(!sessionInput) return;
+    try {
+      await ReportsAPI.compute(sessionInput)
+      const stats = await ReportsAPI.stats(sessionInput)
+      console.log('Stats', stats)
+    } catch(e){ setError(e.message) }
+  }
+
+  const handleGenerateScenarios = async () => {
+    if(!selectedReport) return;
+    try {
+      setScenarioLoading(true)
+      const resp = await GamesAPI.scenarios(selectedReport.gameName?.toLowerCase().replace(/\s+/g,'-')||'team-game', 'Team needs communication focus')
+      setScenarios(resp.scenarios || [])
+    } catch(e){ setError(e.message) } finally { setScenarioLoading(false) }
   }
 
   const MetricCard = ({ title, value, trend, icon: Icon, color = 'blue' }) => (
@@ -529,9 +647,47 @@ const ManagerDashboard = () => {
           }}>
             Manager Dashboard
           </h1>
+          {managerBalance !== null && (
+            <div className="mt-2 inline-block px-3 py-1 rounded-full bg-indigo-600/30 border border-indigo-500/40 text-xs text-indigo-200">
+              Balance: {managerBalance} pts
+            </div>
+          )}
           <p style={{ color: '#94a3b8', fontSize: '1.1rem' }}>
             Track team performance and engagement insights
           </p>
+          <div className="mt-4"><AuthPanel /></div>
+          {pdfReports.length > 0 && (
+            <div className="mt-4 p-4 bg-slate-800/40 rounded border border-slate-600/40">
+              <div className="font-semibold mb-2 text-slate-200 flex items-center gap-2"><FileText className="w-4 h-4"/> Recent PDF Reports</div>
+              <ul className="text-xs space-y-1 max-h-40 overflow-auto pr-1">
+                {pdfReports.slice(0,10).map(r=> (
+                  <li key={r.id} className="flex justify-between gap-2">
+                    <span className="truncate">{r.session_id}</span>
+                    <span className="opacity-60">{new Date(r.created_at||r.createdAt).toLocaleDateString()}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>) }
+          { (history.transactions.length || history.redemptions.length) && (
+            <div className="mt-4 grid md:grid-cols-2 gap-4">
+              <div className="p-3 bg-slate-800/40 rounded border border-slate-600/40">
+                <div className="font-semibold mb-2 text-slate-200">Recent Points</div>
+                <ul className="text-xs space-y-1 max-h-40 overflow-auto">
+                  {history.transactions.slice(0,8).map(t=> (
+                    <li key={t.id} className="flex justify-between"><span>{t.delta>0?'+':''}{t.delta}</span><span className="opacity-60 truncate max-w-[120px]">{t.reason}</span><span className="opacity-40">{new Date(t.createdAt).toLocaleDateString()}</span></li>
+                  ))}
+                </ul>
+              </div>
+              <div className="p-3 bg-slate-800/40 rounded border border-slate-600/40">
+                <div className="font-semibold mb-2 text-slate-200">Redemptions</div>
+                <ul className="text-xs space-y-1 max-h-40 overflow-auto">
+                  {history.redemptions.slice(0,8).map(r=> (
+                    <li key={r.id} className="flex justify-between"><span className="truncate max-w-[120px]">{r.name}</span><span className="opacity-60">-{r.pointsCost}</span><span className="opacity-40">{new Date(r.createdAt).toLocaleDateString()}</span></li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          ) }
           
           {/* Mock Data Indicator */}
           {reports.length > 0 && reports[0].id === 1 && (
@@ -553,6 +709,7 @@ const ManagerDashboard = () => {
 
       {/* Key Metrics */}
       {analytics && (
+        <>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           <MetricCard 
             title="Total Sessions" 
@@ -584,7 +741,61 @@ const ManagerDashboard = () => {
           />
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '24px' }}>
+  <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '24px' }}>
+          {/* Advanced Tools */}
+          <div className="bg-white/5 p-4 rounded-lg border border-gray-700" style={{color:'#e2e8f0'}}>
+            <h3 className="font-semibold mb-2">Advanced Analytics & AI Tools</h3>
+            <div className="flex flex-col md:flex-row gap-4 items-start md:items-end">
+              <div className="flex-1">
+                <label className="text-xs uppercase tracking-wide text-gray-400">Session ID</label>
+                <input value={sessionInput} onChange={e=>setSessionInput(e.target.value)} placeholder="session UUID" className="mt-1 w-full px-3 py-2 rounded bg-gray-800 text-sm focus:outline-none border border-gray-600" />
+              </div>
+              <button onClick={handleGenerateDeepReport} disabled={deepLoading || !sessionInput} className="px-4 py-2 rounded bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-sm font-medium">{deepLoading? 'Generating...':'Deep Report'}</button>
+              <button onClick={handleComputeStats} disabled={!sessionInput} className="px-4 py-2 rounded bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-sm font-medium">Compute Stats</button>
+              <button onClick={handleGenerateScenarios} disabled={scenarioLoading} className="px-4 py-2 rounded bg-teal-600 hover:bg-teal-500 disabled:opacity-50 text-sm font-medium">{scenarioLoading? 'AI...':'AI Scenarios'}</button>
+            </div>
+            <div className="mt-4 grid grid-cols-1 md:grid-cols-4 gap-3">
+              <div>
+                <label className="text-[10px] uppercase tracking-wide text-gray-400">Company (optional)</label>
+                <input value={reportCompany} onChange={e=>setReportCompany(e.target.value)} placeholder="Company" className="mt-1 w-full px-2 py-1 rounded bg-gray-800 text-xs border border-gray-600" />
+              </div>
+              <div>
+                <label className="text-[10px] uppercase tracking-wide text-gray-400">Email (optional)</label>
+                <input value={reportEmail} onChange={e=>setReportEmail(e.target.value)} placeholder="manager@company.com" className="mt-1 w-full px-2 py-1 rounded bg-gray-800 text-xs border border-gray-600" />
+              </div>
+              <div className="flex items-end">
+                <button onClick={handleGeneratePdf} disabled={pdfGenerating || !sessionInput} className="w-full px-3 py-2 rounded bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-xs font-medium">{pdfGenerating? 'PDF...' : 'Generate PDF'}</button>
+              </div>
+              <div className="text-xs text-gray-400 flex items-end">{reportMessage}</div>
+            </div>
+            {deepReport && (
+              <div className="mt-4 text-xs max-h-64 overflow-auto bg-black/30 p-3 rounded border border-gray-700">
+                <pre className="whitespace-pre-wrap">{JSON.stringify(deepReport.executiveSummary, null, 2)}</pre>
+              </div>
+            )}
+            {scenarios.length>0 && (
+              <div className="mt-4">
+                <h4 className="text-sm font-semibold mb-1">Generated Scenarios</h4>
+                <ul className="text-xs space-y-1 max-h-40 overflow-auto">
+                  {scenarios.map((s,i)=>(<li key={i} className="p-2 bg-gray-800 rounded border border-gray-700">{s.scenario || s.title || 'Scenario'} </li>))}
+                </ul>
+              </div>
+            )}
+            {/* Template Save */}
+            <div className="mt-6 border-t border-gray-700 pt-4">
+              <h4 className="text-sm font-semibold mb-2">Scenario Templates</h4>
+              <div className="flex flex-col gap-2 mb-2">
+                <input value={templateName} onChange={e=>setTemplateName(e.target.value)} placeholder="Template name" className="px-3 py-2 rounded bg-gray-800 text-xs border border-gray-700" />
+                <textarea value={templateContent} onChange={e=>setTemplateContent(e.target.value)} placeholder="Template content / prompt" rows={3} className="px-3 py-2 rounded bg-gray-800 text-xs border border-gray-700" />
+                <button disabled={savingTemplate || !templateName || !templateContent} onClick={handleSaveTemplate} className="px-3 py-2 rounded bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-xs font-medium w-fit">{savingTemplate? 'Saving...':'Save Template'}</button>
+              </div>
+              {templates.length>0 && (
+                <ul className="text-xs space-y-1 max-h-32 overflow-auto">
+                  {templates.map(t=>(<li key={t.id||t.session_id} className="p-2 bg-gray-800 rounded border border-gray-700"><span className="font-semibold">{t.payload?.name||t.name}</span><span className="opacity-60"> — { (t.payload?.content||'').slice(0,60) }</span></li>))}
+                </ul>
+              )}
+            </div>
+          </div>
           {/* Report List */}
           <div>
             <ReportsList 
@@ -642,7 +853,30 @@ const ManagerDashboard = () => {
               </div>
             )}
           </div>
+          {/* History Panel */}
+          <div className="bg-white/5 p-4 rounded-lg border border-gray-700" style={{color:'#e2e8f0'}}>
+            <h3 className="font-semibold mb-2">Points & Rewards History</h3>
+            <button onClick={()=>refreshHistory()} className="mb-2 text-xs px-2 py-1 rounded bg-indigo-600 hover:bg-indigo-500">Refresh</button>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+              <div>
+                <h4 className="font-semibold mb-1">Transactions</h4>
+                <ul className="space-y-1 max-h-40 overflow-auto">
+                  {history.transactions.map(tx=>(<li key={tx.id} className="p-2 bg-gray-800 rounded border border-gray-700 flex justify-between"><span>{tx.reason}</span><span className="font-mono">{tx.delta}</span></li>))}
+                  {history.transactions.length===0 && <li className="opacity-60">No transactions</li>}
+                </ul>
+              </div>
+              <div>
+                <h4 className="font-semibold mb-1">Redemptions</h4>
+                <ul className="space-y-1 max-h-40 overflow-auto">
+                  {history.redemptions.map(r=>(<li key={r.id} className="p-2 bg-gray-800 rounded border border-gray-700 flex justify-between"><span>{r.name}</span><span className="font-mono">{r.pointsCost}</span></li>))}
+                  {history.redemptions.length===0 && <li className="opacity-60">No redemptions</li>}
+                </ul>
+              </div>
+            </div>
+          </div>
         </div>
+        </>
+      )}
       </div>
     </div>
   )

@@ -5,6 +5,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
+import mvpRepo from './services/mvpRepo.js'
 // Optional: deferred import for automatic migrations if enabled
 let autoMigrateFn = null
 if(process.env.AUTO_MIGRATE === 'true') {
@@ -53,13 +54,19 @@ const io = new SocketServer(server, {
 
 const PORT = process.env.PORT || 3001;
 
+// Warn if important API keys missing (helps local dev clarity)
+['DASHBOARD_API_KEY','MVP_API_KEY','NIGHTFALL_API_KEY'].forEach(k => {
+  if(!process.env[k]) {
+    console.warn(`⚠️  Env ${k} not set. Related routes are OPEN in dev. Set ${k}=<strong_random_value> to enforce x-api-key.`)
+  }
+});
+
 // Track which major route groups loaded (diagnostics)
 const routeStatus = {
   auth: false,
   games: false,
   lobby: false,
   analytics: false,
-  reports: false,
   rewards: false,
   dashboard: false,
   nightfall: false,
@@ -215,7 +222,9 @@ const setupRoutes = () => {
   routeStatus.lobby = !!lobbyRoutes;
   routeStatus.analytics = !!analyticsRoutes;
   routeStatus.reports = !!reportsRoutes;
-  routeStatus.rewards = !!rewardsRoutes;
+  // Only mount legacy mock rewards if explicitly enabled to avoid confusion with DB-backed MVP rewards
+  const enableLegacyRewards = process.env.ENABLE_LEGACY_REWARDS === 'true';
+  routeStatus.rewards = !!rewardsRoutes && enableLegacyRewards;
   routeStatus.dashboard = !!dashboardRoutes;
   routeStatus.nightfall = !!nightfallRoutes;
   routeStatus.mvp = !!mvpRoutes;
@@ -225,12 +234,18 @@ const setupRoutes = () => {
   if (lobbyRoutes) app.use('/api/lobby', lobbyRoutes);
   if (analyticsRoutes) app.use('/api/analytics', analyticsRoutes);
   if (reportsRoutes) app.use('/api/reports', reportsRoutes);
-  if (rewardsRoutes) app.use('/api/rewards', rewardsRoutes);
+  if (rewardsRoutes && enableLegacyRewards) app.use('/api/rewards', rewardsRoutes);
   if (dashboardRoutes) app.use('/api/dashboard', dashboardRoutes);
   if (nightfallRoutes) app.use('/api/nightfall', nightfallRoutes);
   if (mvpRoutes) app.use('/api/mvp', mvpRoutes);
 
   console.log('✅ API routes mounted (eager)', routeStatus);
+  // Post-mount lightweight reward seeding for MVP DB-backed store (idempotent)
+   if (process.env.SEED_REWARDS === 'true') {
+     mvpRepo.seedDefaultRewards?.().then(seeded=>{
+       if(seeded?.length) console.log(`🌱 Seeded ${seeded.length} default rewards`)
+     }).catch(e=>console.warn('Reward seeding failed', e.message))
+   }
 };
 
 // Initialize services and start server

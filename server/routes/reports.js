@@ -1,7 +1,10 @@
 import express from 'express';
 import { authenticateUser } from '../middleware/auth.js';
 import { ReportGenerator } from '../services/reportGenerator.js';
+import { saveReport } from '../services/mvpRepo.js';
 import { gameAnalytics } from './analytics.js';
+import { AdvancedAnalyticsService } from '../services/advancedAnalyticsService.js';
+import { v4 as uuidv4 } from 'uuid';
 
 const router = express.Router();
 
@@ -79,6 +82,11 @@ router.post('/generate', authenticateUser, async (req, res) => {
       }
     }
     
+    // Persist metadata (best-effort)
+    try {
+      await saveReport({ sessionId, managerEmail: req.user?.email, insights: report.executiveSummary||null, pdfPath: `inline:${report.id}`, type:'pdf', payload:{ meta: reportMetadata }, })
+    } catch(e){ console.warn('report save failed', e.message) }
+
     // Return PDF for download
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="team-report-${sessionId}.pdf"`);
@@ -138,6 +146,76 @@ router.post('/preview', authenticateUser, async (req, res) => {
     });
   }
 });
+
+/**
+ * @route POST /api/reports/deep
+ * @desc Generate deep analytics report (stores structured insights + returns JSON)
+ * @access Private
+ */
+router.post('/deep', authenticateUser, async (req, res) => {
+  try {
+    const { sessionId, gameId, managerEvaluation, companyInfo } = req.body;
+    if(!sessionId) return res.status(400).json({ success:false, error:'sessionId required'});
+    const sessionEvents = gameAnalytics.get(sessionId) || [];
+    if(sessionEvents.length===0) return res.status(404).json({ success:false, error:'No events for session'});
+    const reportGenerator = new ReportGenerator();
+    const report = await reportGenerator.generateReport({ sessionId, gameId, sessionEvents, managerEvaluation: managerEvaluation||{}, companyInfo: companyInfo||{} });
+    // Persist core insights in reports table
+    try {
+      await AdvancedAnalyticsService.upsertPlayerStats(sessionId, 'aggregate', { executiveSummary: report.executiveSummary, analytics: report.analytics });
+    } catch(e){ console.error('persist deep report summary failed', e); }
+    res.json({ success:true, report });
+  } catch (e){
+    console.error('deep report error', e);
+    res.status(500).json({ success:false, error:'Failed to generate deep report'});
+  }
+});
+
+/**
+ * @route GET /api/reports/session/:sessionId/stats
+ * @desc Retrieve stored computed player stats
+ * @access Private
+ */
+router.get('/session/:sessionId/stats', authenticateUser, async (req,res)=>{
+  try {
+    const stats = await AdvancedAnalyticsService.getSessionStats(req.params.sessionId);
+    res.json({ success:true, stats });
+  } catch(e){
+    res.status(500).json({ success:false, error:'Failed to load stats'});
+  }
+});
+
+/**
+ * @route POST /api/reports/session/:sessionId/compute
+ * @desc Compute & store per-player stats snapshot
+ * @access Private
+ */
+router.post('/session/:sessionId/compute', authenticateUser, async (req,res)=>{
+  try {
+    const sessionId = req.params.sessionId;
+    const events = gameAnalytics.get(sessionId) || [];
+    if(events.length===0) return res.status(404).json({ success:false, error:'No events for session'});
+    // Simple per-player aggregation
+    const perPlayer = {};
+    events.forEach(ev=>{
+      const pid = ev.playerId || 'anon';
+      perPlayer[pid] ||= { answers:0, chats:0, reactions:0, firstEvent: ev.timestamp, lastEvent: ev.timestamp };
+      if(ev.eventType==='answer_submitted') perPlayer[pid].answers++;
+      if(ev.eventType==='chat_message') perPlayer[pid].chats++;
+      if(ev.eventType==='reaction_sent') perPlayer[pid].reactions++;
+      perPlayer[pid].lastEvent = ev.timestamp;
+    });
+    for(const [pid, stats] of Object.entries(perPlayer)){
+      stats.durationSec = (new Date(stats.lastEvent)-new Date(stats.firstEvent))/1000;
+      await AdvancedAnalyticsService.upsertPlayerStats(sessionId, pid, stats);
+    }
+    res.json({ success:true, players:Object.keys(perPlayer).length });
+  } catch(e){
+    console.error('compute stats error', e);
+    res.status(500).json({ success:false, error:'Failed to compute stats'});
+  }
+});
+
 
 /**
  * @route GET /api/reports/templates

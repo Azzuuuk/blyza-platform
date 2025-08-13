@@ -25,7 +25,7 @@ export function maybeJwt(){
       }
     } else {
       // Fallback demo identity
-      req.user = req.user || { id:'demo_manager_1', role:'manager', name:'Demo Manager' }
+  req.user = req.user || { id:'demo_manager_1', role:'manager', name:'Demo Manager', email:'demo@blyza.com' }
     }
     next()
   }

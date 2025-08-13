@@ -180,16 +180,19 @@ const ManagerFeedback = () => {
         platform: 'blyza-manager-feedback'
       }
 
-      // Send to n8n webhook
-      const response = await fetch('https://blyza.app.n8n.cloud/webhook/blyza-analysis', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(completeAnalysisData)
-      })
+      // Parallel: send to n8n AND store evaluation internally
+      const tasks = []
+      tasks.push(fetch('https://blyza.app.n8n.cloud/webhook/blyza-analysis', {
+        method: 'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify(completeAnalysisData)
+      }).catch(()=>null))
+      try {
+        const { MvpAPI } = await import('../api/index.js')
+        tasks.push(MvpAPI.evaluation({ sessionId: completeAnalysisData.sessionId, managerEmail: completeAnalysisData.qualitative.managerInfo.managerEmail, ratings:{}, comments: feedback.overallObservations || '' }))
+      } catch(e){ console.warn('Eval save failed', e.message) }
+      const results = await Promise.all(tasks)
+      const webhookOk = results[0]?.ok || results[0]?.success || false
 
-      if (response.ok) {
+      if (webhookOk) {
         console.log('✅ Complete analysis data sent to n8n successfully')
         // Simulate additional AI processing time
         setTimeout(() => {
@@ -204,7 +207,7 @@ const ManagerFeedback = () => {
             }
           })
         }, 2000)
-      } else {
+  } else {
         console.warn('⚠️ Failed to send data to n8n:', response.status)
         // Still navigate to results even if webhook fails
         setTimeout(() => {

@@ -75,31 +75,10 @@ const GameIntent = () => {
   }
 
   const intents = [
-    {
-      id: 'team-building',
-      title: 'Team Building',
-      description: 'Strengthen bonds, improve collaboration, and build trust',
-      icon: <Users className="w-8 h-8" style={{color: '#60a5fa'}} />,
-      popular: true
-    },
-    {
-      id: 'skill-development',
-      title: 'Skill Development', 
-      description: 'Enhance specific skills through interactive challenges',
-      icon: <Target className="w-8 h-8" style={{color: '#34d399'}} />
-    },
-    {
-      id: 'team-assessment',
-      title: 'Team Assessment',
-      description: 'Evaluate team dynamics and identify areas for improvement',
-      icon: <CheckCircle2 className="w-8 h-8" style={{color: '#a855f7'}} />
-    },
-    {
-      id: 'onboarding',
-      title: 'New Hire Onboarding',
-      description: 'Welcome and integrate new team members effectively',
-      icon: <Heart className="w-8 h-8" style={{color: '#fb7185'}} />
-    }
+    { id: 'team-building', title: 'Team Building', description: 'Strengthen bonds, improve collaboration, and build trust', icon: <Users className="w-8 h-8" style={{color: '#60a5fa'}} />, popular: true, enabled: true },
+    { id: 'skill-development', title: 'Skill Development', description: 'Enhance specific skills through interactive challenges', icon: <Target className="w-8 h-8" style={{color: '#34d399'}} />, enabled: false },
+    { id: 'team-assessment', title: 'Team Assessment', description: 'Evaluate team dynamics and identify areas for improvement', icon: <CheckCircle2 className="w-8 h-8" style={{color: '#a855f7'}} />, enabled: false },
+    { id: 'onboarding', title: 'New Hire Onboarding', description: 'Welcome and integrate new team members effectively', icon: <Heart className="w-8 h-8" style={{color: '#fb7185'}} />, enabled: false }
   ]
 
   const teamAspects = [

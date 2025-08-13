@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Gift, Star, Coins, ShoppingBag, Filter, Search } from 'lucide-react'
 
@@ -7,8 +7,34 @@ const RewardsStore = () => {
   const [selectedCategory, setSelectedCategory] = useState('all')
   const [searchTerm, setSearchTerm] = useState('')
 
-  // Mock user data
-  const userCoins = 1250
+  const [userCoins, setUserCoins] = useState(0)
+  const [loading, setLoading] = useState(true)
+  const [rewards, setRewards] = useState([])
+  const [redeeming, setRedeeming] = useState(null)
+  const [error, setError] = useState(null)
+  const [message, setMessage] = useState(null)
+  useEffect(()=>{
+    let mounted = true
+    async function load(){
+      try {
+        setLoading(true)
+        setError(null)
+        // lazy import to avoid bundle cycle
+        const { MvpAPI } = await import('../api/index.js')
+        await MvpAPI.upsertUser(import.meta.env.VITE_DEMO_USER_EMAIL || 'demo@blyza.com', 'Demo User')
+        const [bal, rew] = await Promise.all([
+          MvpAPI.balance().catch(()=>({ balance:0 })),
+          MvpAPI.rewards().catch(()=>({ rewards:[] }))
+        ])
+        if(!mounted) return
+        setUserCoins(bal.balance||0)
+        setRewards(rew.rewards||[])
+      } catch (e) { if(mounted) setError(e.message) }
+      finally { if(mounted) setLoading(false) }
+    }
+    load()
+    return ()=>{ mounted=false }
+  },[])
 
   // Mock rewards data
   const categories = [
@@ -18,84 +44,38 @@ const RewardsStore = () => {
     { id: 'experiences', name: 'Experiences', icon: Coins }
   ]
 
-  const rewards = [
-    {
-      id: 1,
-      title: 'Premium Game Access',
-      description: 'Unlock exclusive team-building games for 30 days',
-      cost: 500,
-      category: 'digital',
-      image: '🎮',
-      inStock: true,
-      popular: true
-    },
-    {
-      id: 2,
-      title: 'Team Lunch Voucher',
-      description: '$50 voucher for team lunch at popular restaurants',
-      cost: 800,
-      category: 'physical',
-      image: '🍽️',
-      inStock: true,
-      popular: false
-    },
-    {
-      id: 3,
-      title: 'Virtual Escape Room',
-      description: 'Premium virtual escape room experience for your team',
-      cost: 1200,
-      category: 'experiences',
-      image: '🔓',
-      inStock: true,
-      popular: true
-    },
-    {
-      id: 4,
-      title: 'Custom Game Creation',
-      description: 'AI-powered custom game tailored to your team',
-      cost: 1000,
-      category: 'digital',
-      image: '⚡',
-      inStock: true,
-      popular: false
-    },
-    {
-      id: 5,
-      title: 'Team Building Kit',
-      description: 'Physical game kit delivered to your office',
-      cost: 1500,
-      category: 'physical',
-      image: '📦',
-      inStock: false,
-      popular: false
-    },
-    {
-      id: 6,
-      title: 'Leadership Workshop',
-      description: '2-hour virtual leadership workshop with expert facilitator',
-      cost: 2000,
-      category: 'experiences',
-      image: '🎯',
-      inStock: true,
-      popular: true
-    }
-  ]
+  const mappedRewards = rewards.map(r=>({
+    id: r.id,
+    title: r.name,
+    description: r.metadata?.description || r.category,
+    cost: r.pointsCost,
+    category: r.category || 'other',
+    image: r.metadata?.emoji || '�',
+    inStock: r.active !== false,
+    popular: r.metadata?.popular || false
+  }))
 
-  const filteredRewards = rewards.filter(reward => {
+  const filteredRewards = mappedRewards.filter(reward => {
     const matchesCategory = selectedCategory === 'all' || reward.category === selectedCategory
     const matchesSearch = reward.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          reward.description.toLowerCase().includes(searchTerm.toLowerCase())
     return matchesCategory && matchesSearch
   })
 
-  const handlePurchase = (reward) => {
-    if (userCoins >= reward.cost && reward.inStock) {
-      alert(`Purchased ${reward.title} for ${reward.cost} coins!`)
-    } else if (!reward.inStock) {
-      alert('This item is currently out of stock.')
-    } else {
-      alert('Insufficient coins for this purchase.')
-    }
+  const handlePurchase = async (reward) => {
+    if(redeeming) return
+    setMessage(null)
+    if (!reward.inStock) { setMessage('Item out of stock'); return }
+    if (userCoins < reward.cost) { setMessage('Not enough coins'); return }
+    setRedeeming(reward.id)
+    try {
+      const { MvpAPI } = await import('../api/index.js')
+  const res = await MvpAPI.redeem(reward.id)
+      setUserCoins(u=>u - reward.cost)
+      setMessage(`Redeemed ${reward.title}. Code: ${res.code || 'N/A'}`)
+  window.dispatchEvent(new CustomEvent('blyza:rewards:redeemed', { detail:{ rewardId: reward.id, redemption: res }}))
+    } catch (e) { setError(e.message) }
+    finally { setRedeeming(null) }
   }
 
   return (
@@ -122,7 +102,7 @@ const RewardsStore = () => {
             <div className="flex items-center space-x-4">
               <div className="flex items-center space-x-2 bg-gradient-to-r from-yellow-500/20 to-amber-500/20 px-4 py-2 rounded-full border border-yellow-500/30">
                 <Coins className="w-5 h-5 text-yellow-400" />
-                <span className="font-semibold text-yellow-300">{userCoins} coins</span>
+                <span className="font-semibold text-yellow-300">{loading ? '...' : userCoins} coins</span>
               </div>
               
               <button
@@ -211,7 +191,9 @@ const RewardsStore = () => {
         </div>
 
         {/* Rewards Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+  {error && <div className="mb-4 text-red-400">{error}</div>}
+  {message && <div className="mb-4 text-green-400">{message}</div>}
+  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
           {filteredRewards.map((reward) => (
             <div key={reward.id} style={{
               background: 'rgba(51, 65, 85, 0.1)',
@@ -288,7 +270,7 @@ const RewardsStore = () => {
                     ? 'Out of Stock' 
                     : userCoins < reward.cost 
                       ? 'Insufficient Coins' 
-                      : 'Redeem Now'
+                      : (redeeming === reward.id ? 'Redeeming...' : 'Redeem Now')
                   }
                 </button>
               </div>

@@ -31,8 +31,14 @@ export async function runMigrations() {
 `CREATE INDEX IF NOT EXISTS idx_sessions_join_code ON sessions(join_code);`,
 `CREATE INDEX IF NOT EXISTS idx_session_events_session_id_created_at ON session_events(session_id, created_at DESC);`
   ]
+  // Post-table additive migrations for evolving schema
+  const alters = [
+    `ALTER TABLE reports ADD COLUMN IF NOT EXISTS type TEXT;`,
+    `ALTER TABLE reports ADD COLUMN IF NOT EXISTS payload JSONB;`
+  ]
+  for(const sql of alters){ await query(sql) }
   for(const sql of statements){
     await query(sql)
   }
-  return { applied: statements.length }
+  return { applied: statements.length + alters.length }
 }

@@ -1,5 +1,6 @@
 import express from 'express';
 import { authenticateUser } from '../middleware/auth.js';
+import { AdvancedAnalyticsService } from '../services/advancedAnalyticsService.js';
 
 const router = express.Router();
 
@@ -69,6 +70,7 @@ router.post('/event', async (req, res) => {
       return res.status(400).json({ success: false, error: 'Events array required' });
     }
 
+    const toPersist = [];
     events.forEach(ev => {
       const sessionId = ev?.payload?.sessionId || ev?.payload?.session_id || 'unknown-session';
       if (!gameAnalytics.has(sessionId)) gameAnalytics.set(sessionId, []);
@@ -80,7 +82,10 @@ router.post('/event', async (req, res) => {
         timestamp: new Date(ev.ts || Date.now()).toISOString(),
         _raw: ev,
       });
+      toPersist.push({ type: ev.type || ev.eventType, eventData: ev.payload });
     });
+    // Persist to DB (best effort)
+    try { await AdvancedAnalyticsService.recordRawEvents(events[0]?.payload?.sessionId, toPersist); } catch(e){ /* already logged */ }
 
     res.json({ success: true, stored: events.length });
   } catch (error) {

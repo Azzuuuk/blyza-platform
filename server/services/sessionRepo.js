@@ -61,3 +61,40 @@ export async function listSessions(limit=50) {
   const res = await query(`SELECT id, join_code, status, created_at, updated_at FROM sessions ORDER BY created_at DESC LIMIT $1`, [limit])
   return res.rows
 }
+
+// Aggregate event counts across many sessions (basic multi-session analytics)
+export async function aggregateSessionEventCounts({ sinceHours = 24 } = {}) {
+  const res = await query(
+    `SELECT session_id, COUNT(*)::int as event_count, MIN(created_at) as first_at, MAX(created_at) as last_at
+     FROM session_events
+     WHERE created_at > NOW() - ($1::int || ' hours')::interval
+     GROUP BY session_id
+     ORDER BY MAX(created_at) DESC
+     LIMIT 500`,
+    [sinceHours]
+  )
+  return res.rows
+}
+
+export async function recentEventTypeDistribution({ sinceMinutes = 60 } = {}) {
+  const res = await query(
+    `SELECT type, COUNT(*)::int as count
+     FROM session_events
+     WHERE created_at > NOW() - ($1::int || ' minutes')::interval
+     GROUP BY type
+     ORDER BY COUNT(*) DESC`,
+    [sinceMinutes]
+  )
+  return res.rows
+}
+
+export async function activeSessionsSince({ sinceMinutes = 120 } = {}) {
+  const res = await query(
+    `SELECT DISTINCT session_id
+       FROM session_events
+      WHERE created_at > NOW() - ($1::int || ' minutes')::interval
+      LIMIT 1000`,
+    [sinceMinutes]
+  )
+  return res.rows.map(r=>r.session_id)
+}
