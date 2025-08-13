@@ -1,114 +1,118 @@
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
+import { subscribeToPresence, updatePresence, signUpUser, signInUser, signOutUser } from '../services/firebaseAuth'
 
-/**
- * Auth Store - Manages user authentication state
- * Persists user data across browser sessions
- */
-export const useAuthStore = create(
-  persist(
-    (set, get) => ({
-      // User state
+export const useAuthStore = create((set, get) => ({
+  // Auth state
   user: null,
-  token: null,
   isAuthenticated: false,
+  loading: false,
+  error: null,
+
+  // Set user from Firebase Auth
+  setUser: (user) => {
+    set({ 
+      user, 
+      isAuthenticated: !!user, 
       loading: false,
-      error: null,
-      
-      // User preferences
-      preferences: {
-        theme: 'light',
-        notifications: true,
-        language: 'en'
-      },
-      
-      // Actions
-  setUser: (user) => set({ user, isAuthenticated: !!user, error: null }),
-  setToken: (token) => set({ token }),
-      
-      setLoading: (loading) => set({ loading }),
-      
-      setError: (error) => set({ error }),
-      
-      updatePreferences: (newPrefs) => set(state => ({
-        preferences: { ...state.preferences, ...newPrefs }
-      })),
-      
-      // Login action
-      login: async (credentials) => {
-        set({ loading: true, error: null })
-        try {
-          const base = import.meta.env.VITE_API_BASE || 'http://localhost:3001'
-          const response = await fetch(`${base}/api/auth/login`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(credentials)
-          })
-          
-          if (!response.ok) {
-            const txt = await response.text()
-            throw new Error(`Login failed: ${txt}`)
-          }
-
-          const data = await response.json()
-          set({ user: data.user, token: data.token, isAuthenticated: true, loading: false })
-          // Background upsert to MVP user table (non-blocking)
-          try {
-            const { MvpAPI } = await import('../api/index.js')
-            await MvpAPI.upsertUser(data.user.email, data.user.name || 'Manager')
-          } catch(_e){}
-          
-          return data
-        } catch (error) {
-          set({ 
-            error: error.message, 
-            loading: false,
-            isAuthenticated: false 
-          })
-          throw error
-        }
-      },
-
-      signup: async (payload) => {
-        set({ loading: true, error: null })
-        try {
-          const base = import.meta.env.VITE_API_BASE || 'http://localhost:3001'
-            const response = await fetch(`${base}/api/auth/signup`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(payload)
-            })
-            if(!response.ok){
-              const txt = await response.text()
-              throw new Error(`Signup failed: ${txt}`)
-            }
-            const data = await response.json()
-            set({ user: data.user, token: data.token, isAuthenticated: true, loading:false })
-            try {
-              const { MvpAPI } = await import('../api/index.js')
-              await MvpAPI.upsertUser(data.user.email, data.user.name || 'Manager')
-            } catch(_e){}
-            return data
-        } catch (e){
-          set({ error: e.message, loading:false, isAuthenticated:false })
-          throw e
-        }
-      },
-      
-      // Logout action
-  logout: () => set({ user: null, token: null, isAuthenticated: false, error: null }),
-      
-      // Clear error
-      clearError: () => set({ error: null }),
-      
-      // Getters
-      getUserRole: () => get().user?.role || 'guest',
-      isManager: () => get().user?.role === 'manager',
-      isAdmin: () => get().user?.role === 'admin'
-    }),
-    {
-      name: 'blyza-auth', // localStorage key
-  partialize: (state) => ({ user: state.user, token: state.token, isAuthenticated: state.isAuthenticated, preferences: state.preferences })
+      error: null 
+    })
+    
+    // Update presence when user signs in
+    if (user) {
+      updatePresence(user.uid, true)
     }
-  )
-)
+  },
+
+  // Set loading state
+  setLoading: (loading) => set({ loading }),
+
+  // Set error state
+  setError: (error) => set({ error, loading: false }),
+
+  // Clear error
+  clearError: () => set({ error: null }),
+
+  // Sign up method
+  signup: async (userData) => {
+    set({ loading: true, error: null })
+    try {
+      console.log('🔥 Store signup called with:', userData)
+      const result = await signUpUser(
+        userData.email, 
+        userData.password, 
+        userData.name, 
+        userData.role || 'employee'
+      )
+      
+      if (result.success) {
+        get().setUser(result.user)
+        return result
+      } else {
+        set({ error: result.error, loading: false })
+        return result
+      }
+    } catch (error) {
+      console.error('❌ Store signup error:', error)
+      set({ error: error.message, loading: false })
+      return { success: false, error: error.message }
+    }
+  },
+
+  // Login method
+  login: async (userData) => {
+    set({ loading: true, error: null })
+    try {
+      const result = await signInUser(userData.email, userData.password)
+      
+      if (result.success) {
+        get().setUser(result.user)
+        return result
+      } else {
+        set({ error: result.error, loading: false })
+        return result
+      }
+    } catch (error) {
+      set({ error: error.message, loading: false })
+      return { success: false, error: error.message }
+    }
+  },
+
+  // Logout method
+  logout: async () => {
+    set({ loading: true })
+    try {
+      await signOutUser()
+      get().signOut()
+    } catch (error) {
+      console.error('Logout error:', error)
+      set({ loading: false })
+    }
+  },
+
+  // Sign out
+  signOut: async () => {
+    const { user } = get()
+    if (user) {
+      await updatePresence(user.uid, false)
+    }
+    set({ 
+      user: null, 
+      isAuthenticated: false, 
+      loading: false,
+      error: null 
+    })
+  },
+
+  // Initialize auth listener (called from App.jsx)
+  initializeAuth: (authUser) => {
+    if (authUser) {
+      get().setUser(authUser)
+    } else {
+      set({ 
+        user: null, 
+        isAuthenticated: false, 
+        loading: false 
+      })
+    }
+  }
+}))

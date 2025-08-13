@@ -1,5 +1,5 @@
 import React from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { 
   Gamepad2, 
@@ -9,10 +9,16 @@ import {
   Sparkles, 
   ArrowRight,
   Trophy,
-  Zap
+  Zap,
+  LogOut,
+  User
 } from 'lucide-react'
+import { useAuthStore } from '../stores/useAuthStore'
 
 const HomePage = () => {
+  const navigate = useNavigate()
+  const { isAuthenticated, user, logout } = useAuthStore()
+  
   const containerStyle = {
     minHeight: '100vh',
     background: 'linear-gradient(135deg, #0f0f23 0%, #1a1a2e 50%, #16213e 100%)',
@@ -131,13 +137,80 @@ const HomePage = () => {
               </span>
             </div>
             
-            <div style={{display: 'flex', gap: '16px'}}>
-              <Link to="/login" style={{color: '#cbd5e1', textDecoration: 'none', padding: '8px 16px'}}>
-                Login
-              </Link>
-              <Link to="/signup" style={buttonStyle}>
-                Sign Up
-              </Link>
+            <div style={{display: 'flex', gap: '16px', alignItems: 'center'}}>
+              <button 
+                onClick={() => navigate('/join-game')}
+                style={{
+                  ...buttonStyle, 
+                  background: 'rgba(34, 197, 94, 0.1)',
+                  border: '1px solid rgba(34, 197, 94, 0.3)',
+                  color: '#22c55e'
+                }}
+              >
+                Join Game
+              </button>
+              
+              {isAuthenticated && user ? (
+                <>
+                  <button 
+                    onClick={() => navigate('/dashboard')}
+                    style={{
+                      ...buttonStyle,
+                      background: 'rgba(59, 130, 246, 0.1)',
+                      border: '1px solid rgba(59, 130, 246, 0.3)',
+                      color: '#60a5fa'
+                    }}
+                  >
+                    Dashboard
+                  </button>
+                  <div style={{display: 'flex', alignItems: 'center', gap: '12px'}}>
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      padding: '8px 12px',
+                      background: 'rgba(51, 65, 85, 0.3)',
+                      borderRadius: '8px',
+                      border: '1px solid rgba(71, 85, 105, 0.5)'
+                    }}>
+                      <User style={{width: '16px', height: '16px', color: '#cbd5e1'}} />
+                      <span style={{fontSize: '14px', color: '#e2e8f0'}}>{user.email}</span>
+                    </div>
+                    <button 
+                      onClick={() => {
+                        logout()
+                        navigate('/')
+                      }}
+                      style={{
+                        padding: '8px',
+                        background: 'rgba(239, 68, 68, 0.1)',
+                        border: '1px solid rgba(239, 68, 68, 0.3)',
+                        borderRadius: '6px',
+                        color: '#f87171',
+                        cursor: 'pointer'
+                      }}
+                      title="Sign Out"
+                    >
+                      <LogOut style={{width: '16px', height: '16px'}} />
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <button 
+                    onClick={() => navigate('/login')}
+                    style={{color: '#cbd5e1', textDecoration: 'none', padding: '8px 16px', background: 'transparent', border: 'none', cursor: 'pointer'}}
+                  >
+                    Login
+                  </button>
+                  <button 
+                    onClick={() => navigate('/signup')}
+                    style={buttonStyle}
+                  >
+                    Sign Up
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -185,10 +258,27 @@ const HomePage = () => {
           </p>
           
           <div style={{display: 'flex', gap: '16px', justifyContent: 'center', flexWrap: 'wrap'}}>
-            <Link to="/game-intent" style={{...buttonStyle, fontSize: '18px', padding: '16px 32px'}}>
-              Start Building Your Team
-              <ArrowRight style={{width: '20px', height: '20px'}} />
-            </Link>
+            <button 
+              onClick={() => navigate('/signup?role=manager')}
+              style={{...buttonStyle, fontSize: '18px', padding: '16px 32px'}}
+            >
+              <User style={{width: '20px', height: '20px'}} />
+              I'm a Manager
+            </button>
+            <button 
+              onClick={() => navigate('/signup?role=employee')}
+              style={{
+                ...buttonStyle,
+                fontSize: '18px', 
+                padding: '16px 32px',
+                background: 'rgba(34, 197, 94, 0.1)',
+                border: '2px solid #22c55e',
+                color: '#22c55e'
+              }}
+            >
+              <Users style={{width: '20px', height: '20px'}} />
+              I'm an Employee
+            </button>
             <a href="#features" style={{
               ...buttonStyle,
               background: 'transparent',
@@ -199,6 +289,124 @@ const HomePage = () => {
             </a>
           </div>
         </motion.div>
+      </section>
+
+      {/* Featured Game Demo Section */}
+      <section style={{padding: '60px 24px', background: 'rgba(15, 23, 42, 0.3)'}}>
+        <div style={{maxWidth: '1280px', margin: '0 auto'}}>
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8 }}
+            style={{
+              background: 'rgba(51, 65, 85, 0.1)',
+              backdropFilter: 'blur(10px)',
+              border: '1px solid rgba(51, 65, 85, 0.2)',
+              borderRadius: '16px',
+              padding: '40px',
+              textAlign: 'center'
+            }}
+          >
+            <div style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '12px',
+              background: 'rgba(124, 58, 237, 0.1)',
+              border: '1px solid rgba(124, 58, 237, 0.3)',
+              borderRadius: '24px',
+              padding: '8px 16px',
+              marginBottom: '24px'
+            }}>
+              <span style={{ fontSize: '20px' }}>🕵️</span>
+              <span style={{ color: '#a78bfa', fontWeight: '600' }}>MVP DEMO READY</span>
+            </div>
+            
+            <h2 style={{
+              fontSize: '32px',
+              fontWeight: 'bold',
+              marginBottom: '16px',
+              color: 'white'
+            }}>
+              Operation Nightfall: Code Breakers
+            </h2>
+            
+            <p style={{
+              fontSize: '18px',
+              color: '#94a3b8',
+              marginBottom: '32px',
+              maxWidth: '600px',
+              margin: '0 auto 32px'
+            }}>
+              <strong>For Managers:</strong> Create a team-building session, get a room code, share it with your employees, 
+              and observe their collaboration while receiving AI-powered insights on team dynamics.
+            </p>
+            
+            <div style={{display: 'flex', gap: '16px', justifyContent: 'center', flexWrap: 'wrap'}}>
+              <button 
+                onClick={() => navigate('/lobby/create', { state: { gameId: 'code-breakers' } })}
+                style={{
+                  ...buttonStyle,
+                  fontSize: '16px',
+                  padding: '16px 24px',
+                  background: 'linear-gradient(135deg, #7c3aed, #2563eb)',
+                  color: 'white'
+                }}
+              >
+                🎮 Create Team Session
+              </button>
+              
+              <button 
+                onClick={() => navigate('/quick-games')}
+                style={{
+                  ...buttonStyle,
+                  fontSize: '16px',
+                  padding: '16px 24px',
+                  background: 'rgba(168, 85, 247, 0.1)',
+                  border: '1px solid rgba(168, 85, 247, 0.3)',
+                  color: '#a855f7'
+                }}
+              >
+                🎯 Browse All Games
+              </button>
+              
+              <button 
+                onClick={() => navigate('/join-game')}
+                style={{
+                  ...buttonStyle,
+                  fontSize: '16px',
+                  padding: '16px 24px',
+                  background: 'rgba(34, 197, 94, 0.1)',
+                  border: '1px solid rgba(34, 197, 94, 0.3)',
+                  color: '#22c55e'
+                }}
+              >
+                🔗 Join Existing Game
+              </button>
+              
+              <button 
+                onClick={() => navigate('/dashboard')}
+                style={{
+                  ...buttonStyle,
+                  fontSize: '16px',
+                  padding: '16px 24px',
+                  background: 'rgba(59, 130, 246, 0.1)',
+                  border: '1px solid rgba(59, 130, 246, 0.3)',
+                  color: '#60a5fa'
+                }}
+              >
+                📊 View Analytics
+              </button>
+            </div>
+            
+            <div style={{
+              marginTop: '24px',
+              fontSize: '14px',
+              color: '#64748b'
+            }}>
+              Tests: Multiplayer • Data Collection • n8n Workflow • AI Analytics • Dashboard
+            </div>
+          </motion.div>
+        </div>
       </section>
 
       {/* Features Section */}

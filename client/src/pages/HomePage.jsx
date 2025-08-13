@@ -135,10 +135,11 @@ const HomePage = () => {
               className="flex flex-col sm:flex-row gap-4 justify-center items-center"
             >
               <Link to="/game-intent" className="bg-gradient-to-r from-purple-600 via-blue-600 to-indigo-700 hover:from-purple-700 hover:via-blue-700 hover:to-indigo-800 text-white font-semibold py-4 px-8 rounded-xl transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl text-lg group">
-                Explore Games
+                Start Building Your Team
                 <ArrowRight className="w-5 h-5 ml-2 inline group-hover:translate-x-1 transition-transform" />
               </Link>
-              <Link to="/join" className="bg-slate-800/50 backdrop-blur-sm hover:bg-slate-700/60 text-slate-200 hover:text-white font-semibold py-4 px-8 rounded-xl transition-all duration-300 border border-slate-600/50 text-lg">
+              <Link to="/join" className="bg-slate-800/50 backdrop-blur-sm hover:bg-slate-700/60 text-slate-200 hover:text-white font-semibold py-4 px-8 rounded-xl transition-all duration-300 border border-slate-600/50 text-lg flex items-center gap-2">
+                <Users className="w-5 h-5" />
                 Join Existing Game
               </Link>
             </motion.div>
@@ -154,27 +155,79 @@ const HomePage = () => {
               Choose Your Team Building Focus
             </h2>
             <p className="text-slate-300 max-w-2xl mx-auto">
-              Each game category targets specific team dynamics and challenges
+              Start with our signature team building experience
             </p>
           </div>
           
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-            {gameCategories.map((category, index) => (
-              <motion.div
-                key={category.name}
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ duration: 0.5, delay: index * 0.1 }}
-                className="text-center"
-              >
-                <div className="bg-slate-900/50 backdrop-blur-sm rounded-xl p-6 border border-slate-700/50 hover:border-slate-600/80 transition-all duration-300 transform hover:scale-105 cursor-pointer group">
-                  <div className="inline-flex px-3 py-1 rounded-full text-sm font-semibold mb-3 bg-gradient-to-r from-purple-500/20 to-blue-500/20 text-purple-300 border border-purple-500/30">
-                    {category.count} Games
-                  </div>
-                  <h3 className="font-semibold text-white group-hover:text-purple-300 transition-colors duration-300">{category.name}</h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-4xl mx-auto">
+            {/* Team Building - Available */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.5 }}
+              className="text-center"
+            >
+              <Link to="/game-intent" className="block bg-gradient-to-br from-purple-600/20 to-blue-600/20 backdrop-blur-sm rounded-xl p-8 border-2 border-purple-500/50 hover:border-purple-400/70 transition-all duration-300 transform hover:scale-105 group">
+                <div className="w-16 h-16 mx-auto mb-4 rounded-xl bg-gradient-to-r from-purple-600 to-blue-600 flex items-center justify-center text-white shadow-lg group-hover:scale-110 transition-transform duration-300">
+                  <Users className="w-8 h-8" />
                 </div>
-              </motion.div>
-            ))}
+                <div className="inline-flex px-4 py-2 rounded-full text-sm font-semibold mb-4 bg-gradient-to-r from-green-500/20 to-emerald-500/20 text-green-300 border border-green-500/30">
+                  Available Now
+                </div>
+                <h3 className="text-xl font-bold text-white group-hover:text-purple-300 transition-colors duration-300 mb-2">
+                  Team Building
+                </h3>
+                <p className="text-slate-300 text-sm">
+                  Build stronger teams through immersive collaborative challenges
+                </p>
+              </Link>
+            </motion.div>
+
+            {/* Skill Development - Coming Soon */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.5, delay: 0.1 }}
+              className="text-center"
+            >
+              <div className="bg-slate-900/30 backdrop-blur-sm rounded-xl p-8 border border-slate-700/30 opacity-60 cursor-not-allowed">
+                <div className="w-16 h-16 mx-auto mb-4 rounded-xl bg-gradient-to-r from-slate-600 to-slate-700 flex items-center justify-center text-slate-400">
+                  <Brain className="w-8 h-8" />
+                </div>
+                <div className="inline-flex px-4 py-2 rounded-full text-sm font-semibold mb-4 bg-gradient-to-r from-slate-500/20 to-slate-600/20 text-slate-400 border border-slate-500/30">
+                  Coming Soon
+                </div>
+                <h3 className="text-xl font-bold text-slate-400 mb-2">
+                  Skill Development
+                </h3>
+                <p className="text-slate-500 text-sm">
+                  Individual and team skill enhancement programs
+                </p>
+              </div>
+            </motion.div>
+
+            {/* Leadership Training - Coming Soon */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.5, delay: 0.2 }}
+              className="text-center"
+            >
+              <div className="bg-slate-900/30 backdrop-blur-sm rounded-xl p-8 border border-slate-700/30 opacity-60 cursor-not-allowed">
+                <div className="w-16 h-16 mx-auto mb-4 rounded-xl bg-gradient-to-r from-slate-600 to-slate-700 flex items-center justify-center text-slate-400">
+                  <TrendingUp className="w-8 h-8" />
+                </div>
+                <div className="inline-flex px-4 py-2 rounded-full text-sm font-semibold mb-4 bg-gradient-to-r from-slate-500/20 to-slate-600/20 text-slate-400 border border-slate-500/30">
+                  Coming Soon
+                </div>
+                <h3 className="text-xl font-bold text-slate-400 mb-2">
+                  Leadership Training
+                </h3>
+                <p className="text-slate-500 text-sm">
+                  Develop leadership capabilities through interactive scenarios
+                </p>
+              </div>
+            </motion.div>
           </div>
         </div>
       </section>

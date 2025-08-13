@@ -39,7 +39,7 @@ const GameplayPage = () => {
             Live Gameplay
           </h1>
           <p className="text-xl text-gray-600 mb-8">
-            Real-time game interface coming soon with Socket.IO integration!
+            Real-time game interface powered by Firebase Realtime Database!
           </p>
           
           <div className="bg-white rounded-2xl shadow-lg p-8 border border-gray-100">

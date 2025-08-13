@@ -14,12 +14,16 @@ const lobbies = new Map();
  */
 router.post('/create', authenticateUser, async (req, res) => {
   try {
-    const { gameId, settings } = req.body;
+    console.log('Creating lobby with body:', req.body);
+    console.log('User:', req.user);
     
-    if (!gameId) {
+    const { gameId, gameType, settings, maxPlayers } = req.body;
+    const finalGameId = gameId || gameType;
+    
+    if (!finalGameId) {
       return res.status(400).json({
         success: false,
-        error: 'Game ID is required'
+        error: 'Game ID or game type is required'
       });
     }
     
@@ -29,7 +33,7 @@ router.post('/create', authenticateUser, async (req, res) => {
     const lobby = {
       id: lobbyId,
       roomCode,
-      gameId,
+      gameId: finalGameId,
       hostId: req.user.uid,
       hostName: req.user.name,
       settings: settings || {},
@@ -42,16 +46,17 @@ router.post('/create', authenticateUser, async (req, res) => {
       }],
       status: 'waiting', // waiting, starting, in-progress, completed
       createdAt: new Date().toISOString(),
-      maxPlayers: settings?.maxPlayers || 8
+      maxPlayers: maxPlayers || settings?.maxPlayers || 8
     };
     
     lobbies.set(lobbyId, lobby);
+    console.log('Lobby created:', lobby);
     
     res.json({
       success: true,
       lobby: {
         ...lobby,
-        joinLink: `${process.env.CLIENT_URL}/join/${roomCode}`
+        joinLink: `${process.env.CLIENT_URL || 'http://localhost:3002'}/join/${roomCode}`
       }
     });
   } catch (error) {

@@ -17,11 +17,8 @@ import {
   broadcastRoomCompleted, onRoomCompleted, offRoomCompleted,
   broadcastStatePatch, onStatePatch, offStatePatch,
   getChatHistory,
-  isMultiplayerStub,
-  requestLeaderLock, releaseLeaderLock, onLockUpdate, offLockUpdate, onLockResult, offLockResult
+  isMultiplayerStub
 } from './engine/socketClient'
-import { requestFullSync } from './engine/socketClient'
-import { getRealtimeMetrics } from './engine/socketClient'
 import { useNightfallStore } from './engine/gameStore'
 import toast from 'react-hot-toast'
 import { MISSION_THEME, MISSION_ANIMATIONS } from './MissionTheme'
@@ -278,18 +275,21 @@ const OperationNightfall = () => {
     try {
       const results = buildMissionResults({ sessionId, startTime })
       if(results) setMissionResults(results)
-      const authState = JSON.parse(localStorage.getItem('blyza-auth')||'{}')
-      const user = authState?.state?.user
-      const isManager = user && (user.role === 'manager' || user.role === 'admin')
-      setTimeout(()=>{
-        if(isManager){
-          navigate('/manager-feedback', { state: { gameData: results, gameTitle: 'Operation Nightfall', teamAspect: 'problem-solving' } })
-        } else {
-          navigate('/results', { state: { gameData: results } })
-        }
+      
+      // Route to PostGameRouter which will determine the appropriate flow
+      setTimeout(() => {
+        navigate('/post-game', { 
+          state: { 
+            gameData: {
+              ...results,
+              gameTitle: 'Operation Nightfall',
+              teamAspect: 'problem-solving'
+            }
+          }
+        })
       }, 1200)
     } catch(e) {
-      setTimeout(()=>navigate('/results', { state:{ sessionId }}), 1500)
+      setTimeout(() => navigate('/results', { state: { sessionId } }), 1500)
     }
   }
 

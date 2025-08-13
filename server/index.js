@@ -1,6 +1,5 @@
 import express from 'express';
 import { createServer } from 'http';
-import { Server as SocketServer } from 'socket.io';
 import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
@@ -32,25 +31,13 @@ try { mvpRoutes = (await import('./routes/mvp.js')).default } catch {}
 // Import services
 import { initializeFirebase } from './services/firebase.js';
 import { GameEngine } from './services/gameEngine.js';
-import { SocketHandler } from './services/socketHandler.js';
-import { NightfallRealtime } from './services/nightfallRealtime.js';
+// import { NightfallRealtime } from './services/nightfallRealtime.js'; // TODO: Migrate to Firebase RTDB
 
 // Load environment variables
 dotenv.config();
 
 const app = express();
 const server = createServer(app);
-const io = new SocketServer(server, {
-  cors: {
-    origin: [
-      "http://localhost:3000",
-      "http://localhost:3001",
-      "http://localhost:3002"
-    ],
-    methods: ["GET", "POST"],
-    credentials: true
-  }
-});
 
 const PORT = process.env.PORT || 3001;
 
@@ -163,13 +150,24 @@ app.use(helmet({
   },
 }));
 
-// Rate limiting
+// Rate limiting - More generous for development
 const limiter = rateLimit({
   windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000, // 15 minutes
-  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 100, // limit each IP to 100 requests per windowMs
-  message: 'Too many requests from this IP, please try again later.',
+  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 1000, // Increased for dev
+  message: {
+    success: false,
+    error: 'Too many requests from this IP, please try again later.',
+    retryAfter: 15 * 60 // seconds
+  },
   standardHeaders: true,
   legacyHeaders: false,
+  handler: (req, res) => {
+    res.status(429).json({
+      success: false,
+      error: 'Too many requests from this IP, please try again later.',
+      retryAfter: Math.round((req.rateLimit.resetTime - Date.now()) / 1000)
+    });
+  }
 });
 
 app.use(limiter);
@@ -256,28 +254,25 @@ const initializeServer = async () => {
   // Setup routes (now synchronous)
   setupRoutes();
   
-  // Initialize game engine
+  // Initialize game engine (without Socket.io)
   const { GameEngine } = await import('./services/gameEngine.js').catch(() => ({ GameEngine: null }));
-  const gameEngine = GameEngine ? new GameEngine(io) : null;
+  const gameEngine = GameEngine ? new GameEngine() : null;
   
-  // Initialize socket handling
-  const { SocketHandler } = await import('./services/socketHandler.js').catch(() => ({ SocketHandler: null }));
-  const socketHandler = SocketHandler && gameEngine ? new SocketHandler(io, gameEngine) : null;
-  // Initialize Operation Nightfall real-time channel
-  const nightfallRealtime = new NightfallRealtime(io);
-  try { (await import('./services/nightfallRegistry.js')).registerNightfallRealtime(nightfallRealtime); } catch (e) { console.warn('Nightfall registry not available', e?.message); }
+  // Initialize Operation Nightfall real-time channel (without Socket.io for now)
+  // Note: NightfallRealtime may need refactoring to work with Firebase instead of Socket.io
+  // const nightfallRealtime = new NightfallRealtime();
   
-  if (!gameEngine || !socketHandler) {
-    console.warn('⚠️  Game engine or socket handler not available - some features disabled');
+  if (!gameEngine) {
+    console.warn('⚠️  Game engine not available - some features disabled');
   }
   
-  return { gameEngine, socketHandler };
+  return { gameEngine };
 };
 
 // Start server
-initializeServer().then(({ gameEngine, socketHandler }) => {
+initializeServer().then(({ gameEngine }) => {
   server.listen(PORT, () => {
-    console.log(`\n🚀 Blyza Platform Server Running\n📍 Port: ${PORT}\n🌍 Environment: ${process.env.NODE_ENV || 'development'}\n🔗 Client URL: ${process.env.CLIENT_URL || 'http://localhost:3000'}\n📊 Socket.IO: Ready for real-time connections\n🎮 Game Engine: ${gameEngine ? 'Initialized with 18 templates' : 'Not available'}\n`)
+    console.log(`\n🚀 Blyza Platform Server Running\n📍 Port: ${PORT}\n🌍 Environment: ${process.env.NODE_ENV || 'development'}\n🔗 Client URL: ${process.env.CLIENT_URL || 'http://localhost:3000'}\n🎮 Game Engine: ${gameEngine ? 'Initialized with 18 templates' : 'Not available'}\n📊 Real-time: Firebase RTDB ready\n`)
   })
 }).catch(error => {
   console.error('Failed to initialize server:', error);
@@ -315,15 +310,6 @@ app.use((req,res,next) => {
 // Handle 404 (keep last)
 app.use('*', (req, res) => {
   res.status(404).json({ error: 'Route not found' });
-});
-
-// Socket.IO connection handling
-io.on('connection', (socket) => {
-  console.log(`🔌 Client connected: ${socket.id}`);
-  
-  socket.on('disconnect', (reason) => {
-    console.log(`🔌 Client disconnected: ${socket.id}, reason: ${reason}`);
-  });
 });
 
 // Graceful shutdown

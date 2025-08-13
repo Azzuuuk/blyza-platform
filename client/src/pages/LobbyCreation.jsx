@@ -3,494 +3,685 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { 
   ArrowLeft, 
-  Copy, 
   Users, 
-  Play,
-  Settings,
-  Share2,
+  Share2, 
+  Copy, 
+  CheckCircle, 
+  ExternalLink,
+  Eye,
   UserPlus,
+  Monitor,
   Clock,
-  CheckCircle,
-  Circle,
-  Sparkles,
-  Zap
+  Play,
+  Loader2
 } from 'lucide-react'
+import { useAuthStore } from '../stores/useAuthStore'
+import { 
+  createGameSession, 
+  subscribeToGameSession, 
+  subscribeToPlayers,
+  startGameSession
+} from '../services/firebaseMultiplayer'
+import toast from 'react-hot-toast'
 
 const LobbyCreation = () => {
   const navigate = useNavigate()
   const location = useLocation()
-  const { gameId, customizations } = location.state || {}
-  
-  const [lobbyCode, setLobbyCode] = useState('')
-  const [participants, setParticipants] = useState([
-    { id: 1, name: 'Alex Chen', status: 'ready', avatar: '👨‍💼' },
-    { id: 2, name: 'Sarah Johnson', status: 'ready', avatar: '👩‍💼' },
-    { id: 3, name: 'Mike Rodriguez', status: 'waiting', avatar: '👨‍🎓' },
-    { id: 4, name: 'Emma Davis', status: 'ready', avatar: '👩‍🔬' },
-    { id: 5, name: 'David Kim', status: 'waiting', avatar: '👨‍💻' }
-  ])
-  const [countdown, setCountdown] = useState(null)
+  const { gameId } = location.state || { gameId: 'code-breakers' }
+  const { user, isAuthenticated } = useAuthStore()
 
+  // Manager lobby state
+  const [lobby, setLobby] = useState(null)
+  const [players, setPlayers] = useState({})
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+  const [copied, setCopied] = useState(false)
+  const [sessionId, setSessionId] = useState(null)
+  const [unsubscribeFunctions, setUnsubscribeFunctions] = useState([])
+
+  // Redirect if not authenticated or not a manager
   useEffect(() => {
-    // Generate random lobby code
-    const code = Math.random().toString(36).substring(2, 8).toUpperCase()
-    setLobbyCode(code)
-  }, [])
+    if (!isAuthenticated) {
+      navigate('/login')
+      return
+    }
+    
+    if (user?.role !== 'manager') {
+      toast.error('Only managers can create game sessions')
+      navigate('/')
+      return
+    }
+  }, [isAuthenticated, user, navigate])
 
-  // Common styles
-  const containerStyle = {
-    minHeight: '100vh',
-    background: 'linear-gradient(135deg, #0f0f23 0%, #1a1a2e 50%, #16213e 100%)',
-    color: '#e2e8f0'
-  }
-
-  const headerStyle = {
-    background: 'rgba(15, 23, 42, 0.8)',
-    backdropFilter: 'blur(10px)',
-    borderBottom: '1px solid rgba(51, 65, 85, 0.5)',
-    position: 'sticky',
-    top: 0,
-    zIndex: 50
-  }
-
-  const cardStyle = {
-    background: 'rgba(51, 65, 85, 0.1)',
-    backdropFilter: 'blur(10px)',
-    border: '1px solid rgba(51, 65, 85, 0.2)',
-    borderRadius: '12px',
-    padding: '24px',
-    transition: 'all 0.3s ease'
-  }
-
-  const buttonStyle = {
-    background: 'linear-gradient(135deg, #7c3aed, #2563eb)',
-    color: 'white',
-    padding: '12px 24px',
-    borderRadius: '8px',
-    fontWeight: '600',
-    border: 'none',
-    cursor: 'pointer',
-    transition: 'all 0.3s ease',
-    textDecoration: 'none',
-    display: 'inline-flex',
-    alignItems: 'center',
-    gap: '8px'
-  }
-
-  const gameData = {
-    'trust-fall-modern': {
-      title: '🤝 Trust & Transparency Challenge',
-      color: '#fb7185'
+  // Game info
+  const gameInfo = {
+    'code-breakers': {
+      title: 'Code Breakers',
+      description: 'Team collaboration and problem-solving through encrypted challenges',
+      color: '#7c3aed',
+      minPlayers: 2,
+      maxPlayers: 8
     },
-    'creative-storm': {
-      title: '🌪️ Innovation Storm',
-      color: '#a855f7'
-    },
-    'communication-flow': {
-      title: '💬 Communication Flow',
-      color: '#60a5fa'
+    'operation-nightfall': {
+      title: 'Operation Nightfall',
+      description: 'High-stakes mission requiring strategic coordination',
+      color: '#dc2626',
+      minPlayers: 3,
+      maxPlayers: 6
     }
   }
 
-  const currentGame = gameData[gameId] || gameData['trust-fall-modern']
+  const currentGame = gameInfo[gameId] || gameInfo['code-breakers']
 
-  const copyLobbyCode = () => {
-    navigator.clipboard.writeText(lobbyCode)
-    // Could add a toast notification here
+  // Create manager lobby on mount
+  useEffect(() => {
+    createManagerLobby()
+  }, [])
+
+  const createManagerLobby = async () => {
+    try {
+      setLoading(true)
+      setError('')
+      
+      // Create Firebase game session
+      const result = await createGameSession(gameId, user, currentGame.maxPlayers)
+      
+      if (result.success) {
+        const { session } = result
+        setLobby(session)
+        setSessionId(session.id)
+        
+        // Subscribe to session updates
+        const unsubscribeSession = subscribeToGameSession(session.id, (update) => {
+          if (update.success) {
+            setLobby(update.session)
+          } else {
+            setError(update.error)
+          }
+        })
+        
+        // Subscribe to player updates
+        const unsubscribePlayers = subscribeToPlayers(session.id, (update) => {
+          if (update.success) {
+            setPlayers(update.players)
+          }
+        })
+        
+        setUnsubscribeFunctions([unsubscribeSession, unsubscribePlayers])
+        
+        toast.success('Lobby created successfully!')
+      } else {
+        throw new Error(result.error)
+      }
+      
+    } catch (error) {
+      console.error('Error creating lobby:', error)
+      
+      let errorMessage = 'Failed to create lobby. Please try again.'
+      
+      if (error.message.includes('rate limit') || error.message.includes('Too many')) {
+        errorMessage = 'Too many requests. Please wait a moment and try again.'
+      } else if (error.message.includes('network') || error.message.includes('fetch')) {
+        errorMessage = 'Network error. Please check your connection and try again.'
+      } else if (error.message) {
+        errorMessage = error.message
+      }
+      
+      setError(errorMessage)
+    } finally {
+      setLoading(false)
+    }
   }
 
-  const startGame = () => {
-    setCountdown(3)
-    const timer = setInterval(() => {
-      setCountdown(prev => {
-        if (prev <= 1) {
-          clearInterval(timer)
-          navigate('/game/simulation', { state: { gameId, customizations, lobbyCode, participants } })
-          return null
+  // Cleanup subscriptions on unmount
+  useEffect(() => {
+    return () => {
+      unsubscribeFunctions.forEach(unsubscribe => {
+        if (typeof unsubscribe === 'function') {
+          unsubscribe()
         }
-        return prev - 1
       })
-    }, 1000)
+    }
+  }, [unsubscribeFunctions])
+
+  // Start game function
+  const handleStartGame = async () => {
+    if (!sessionId || !user) return
+    
+    try {
+      setLoading(true)
+      const result = await startGameSession(sessionId, user.uid)
+      
+      if (result.success) {
+        toast.success('Game started!')
+        navigate(`/games/${gameId}/play`, { 
+          state: { 
+            sessionId, 
+            role: 'manager',
+            isObserver: true 
+          } 
+        })
+      } else {
+        setError(result.error)
+        toast.error(result.error)
+      }
+    } catch (error) {
+      setError(error.message)
+      toast.error('Failed to start game')
+    } finally {
+      setLoading(false)
+    }
   }
 
-  const readyCount = participants.filter(p => p.status === 'ready').length
+  // Copy room code for sharing with employees
+  const copyRoomCode = async () => {
+    if (lobby?.roomCode) {
+      try {
+        await navigator.clipboard.writeText(lobby.roomCode)
+        setCopied(true)
+        setTimeout(() => setCopied(false), 2000)
+      } catch (err) {
+        console.error('Failed to copy:', err)
+      }
+    }
+  }
 
-  return (
-    <div style={containerStyle}>
-      {/* Animated Background Elements */}
-      <div style={{position: 'fixed', inset: 0, overflow: 'hidden', pointerEvents: 'none'}}>
-        <div style={{
-          position: 'absolute',
-          top: '20%',
-          left: '10%',
-          width: '150px',
-          height: '150px',
-          background: `rgba(251, 113, 133, 0.1)`,
-          borderRadius: '50%',
-          filter: 'blur(50px)',
-          animation: 'pulse 4s ease-in-out infinite'
-        }}></div>
-        <div style={{
-          position: 'absolute',
-          bottom: '20%',
-          right: '10%',
-          width: '200px',
-          height: '200px',
-          background: `rgba(168, 85, 247, 0.1)`,
-          borderRadius: '50%',
-          filter: 'blur(60px)',
-          animation: 'pulse 4s ease-in-out infinite 2s'
-        }}></div>
+  // Copy join link for sharing
+  const copyJoinLink = async () => {
+    const joinLink = `${window.location.origin}/join?code=${lobby?.roomCode}`
+    try {
+      await navigator.clipboard.writeText(joinLink)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch (err) {
+      console.error('Failed to copy:', err)
+    }
+  }
+
+  // Start game session (when enough employees have joined)
+  const startGameSession_old = async () => {
+    const playerCount = Object.keys(players).length
+    if (playerCount < currentGame.minPlayers) {
+      toast.error(`Need at least ${currentGame.minPlayers} employees to start the session`)
+      return
+    }
+
+    try {
+      setLoading(true)
+      const result = await startGameSession(sessionId, user.uid)
+      
+      if (result.success) {
+        toast.success('Game started!')
+        navigate(`/games/${gameId}/play`, { 
+          state: { 
+            sessionId, 
+            role: 'manager',
+            isObserver: true 
+          } 
+        })
+      } else {
+        setError(result.error)
+        toast.error(result.error)
+      }
+    } catch (error) {
+      console.error('Error starting game:', error)
+      toast.error('Failed to start game')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  if (loading) {
+    return (
+      <div style={{
+        minHeight: '100vh',
+        background: 'linear-gradient(135deg, #0f0f23 0%, #1a1a2e 50%, #16213e 100%)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        color: 'white'
+      }}>
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          style={{ textAlign: 'center' }}
+        >
+          <Clock style={{ width: 48, height: 48, marginBottom: 16 }} />
+          <div>Setting up manager session...</div>
+        </motion.div>
       </div>
+    )
+  }
 
-      {/* Countdown Overlay */}
-      {countdown && (
-        <div style={{
-          position: 'fixed',
-          inset: 0,
-          background: 'rgba(0,0,0,0.8)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 100
-        }}>
-          <motion.div
-            initial={{ scale: 0.5, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
+  if (error) {
+    return (
+      <div style={{
+        minHeight: '100vh',
+        background: 'linear-gradient(135deg, #0f0f23 0%, #1a1a2e 50%, #16213e 100%)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        color: 'white'
+      }}>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ marginBottom: 16, color: '#ef4444' }}>{error}</div>
+          <button
+            onClick={() => navigate('/')}
             style={{
-              fontSize: '128px',
-              fontWeight: 'bold',
-              color: currentGame.color,
-              textShadow: `0 0 50px ${currentGame.color}50`
+              padding: '12px 24px',
+              background: '#3b82f6',
+              color: 'white',
+              border: 'none',
+              borderRadius: '8px',
+              cursor: 'pointer'
             }}
           >
-            {countdown}
-          </motion.div>
+            Back to Home
+          </button>
         </div>
-      )}
+      </div>
+    )
+  }
 
+  return (
+    <div style={{
+      minHeight: '100vh',
+      background: 'linear-gradient(135deg, #0f0f23 0%, #1a1a2e 50%, #16213e 100%)',
+      color: '#e2e8f0'
+    }}>
       {/* Header */}
-      <header style={headerStyle}>
-        <div style={{maxWidth: '1280px', margin: '0 auto', padding: '0 24px'}}>
-          <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', height: '64px'}}>
-            <div style={{display: 'flex', alignItems: 'center', gap: '12px'}}>
-              <button 
-                onClick={() => navigate(-1)}
+      <header style={{
+        background: 'rgba(15, 23, 42, 0.8)',
+        backdropFilter: 'blur(10px)',
+        borderBottom: '1px solid rgba(51, 65, 85, 0.5)',
+        position: 'sticky',
+        top: 0,
+        zIndex: 50
+      }}>
+        <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '0 24px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', height: '64px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <button
+                onClick={() => navigate('/')}
                 style={{
-                  ...buttonStyle,
-                  background: 'rgba(51, 65, 85, 0.3)',
-                  color: '#cbd5e1'
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  padding: '8px 12px',
+                  color: '#cbd5e1',
+                  background: 'transparent',
+                  border: 'none',
+                  cursor: 'pointer'
                 }}
               >
-                <ArrowLeft style={{width: '20px', height: '20px'}} />
-                Back
+                <ArrowLeft style={{ width: 20, height: 20 }} />
+                <span>Back</span>
               </button>
-              
-              <div style={{
-                width: '40px',
-                height: '40px',
-                background: 'linear-gradient(135deg, #7c3aed, #2563eb)',
-                borderRadius: '12px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center'
-              }}>
-                <Users style={{width: '24px', height: '24px', color: 'white'}} />
+
+              <div style={{ width: 1, height: 24, background: '#475569' }} />
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <div style={{
+                  width: 32,
+                  height: 32,
+                  background: `linear-gradient(135deg, ${currentGame.color}, #2563eb)`,
+                  borderRadius: 8,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}>
+                  <Monitor style={{ width: 20, height: 20, color: 'white' }} />
+                </div>
+                <span style={{
+                  fontSize: 18,
+                  fontWeight: 700,
+                  background: 'linear-gradient(135deg, #a78bfa, #60a5fa)',
+                  backgroundClip: 'text',
+                  WebkitBackgroundClip: 'text',
+                  color: 'transparent'
+                }}>Manager Session</span>
               </div>
-              <span style={{
-                fontSize: '24px',
-                fontWeight: 'bold',
-                background: 'linear-gradient(135deg, #a78bfa, #60a5fa)',
-                backgroundClip: 'text',
-                WebkitBackgroundClip: 'text',
-                color: 'transparent'
-              }}>
-                Game Lobby
-              </span>
             </div>
           </div>
         </div>
       </header>
 
-      {/* Main Content */}
-      <main style={{padding: '40px 24px'}}>
-        <div style={{maxWidth: '1200px', margin: '0 auto'}}>
-          
-          {/* Game Header */}
+      <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '32px 24px' }}>
+        {/* Manager Instructions */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          style={{
+            background: 'rgba(168, 85, 247, 0.1)',
+            backdropFilter: 'blur(10px)',
+            border: '2px solid rgba(168, 85, 247, 0.3)',
+            borderRadius: '16px',
+            padding: '32px',
+            marginBottom: '32px',
+            textAlign: 'center'
+          }}
+        >
+          <Monitor style={{ width: 48, height: 48, color: '#a855f7', marginBottom: 16, marginLeft: 'auto', marginRight: 'auto' }} />
+          <h1 style={{
+            fontSize: '32px',
+            fontWeight: 'bold',
+            color: 'white',
+            marginBottom: '12px'
+          }}>
+            Manager Observation Session
+          </h1>
+          <p style={{
+            fontSize: '18px',
+            color: '#cbd5e1',
+            marginBottom: '24px'
+          }}>
+            You are setting up a team-building session. Share the room code below with your employees so they can join and play <strong>{currentGame.title}</strong>.
+          </p>
+          <div style={{
+            background: 'rgba(59, 130, 246, 0.1)',
+            border: '1px solid rgba(59, 130, 246, 0.3)',
+            borderRadius: '8px',
+            padding: '16px',
+            fontSize: '14px',
+            color: '#cbd5e1'
+          }}>
+            <strong>Your role:</strong> Observe employee interactions, take notes, and receive AI-powered insights about team dynamics and collaboration patterns.
+          </div>
+        </motion.div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '32px' }}>
+          {/* Employee Access Code */}
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: 0.1 }}
             style={{
-              ...cardStyle,
-              marginBottom: '32px',
-              background: `linear-gradient(135deg, ${currentGame.color}15, rgba(51, 65, 85, 0.1))`,
-              border: `2px solid ${currentGame.color}30`,
-              textAlign: 'center'
+              background: 'rgba(51, 65, 85, 0.1)',
+              backdropFilter: 'blur(10px)',
+              border: '1px solid rgba(51, 65, 85, 0.2)',
+              borderRadius: '16px',
+              padding: '32px'
             }}
           >
-            <h1 style={{
-              fontSize: '32px',
+            <h2 style={{
+              fontSize: '24px',
               fontWeight: 'bold',
               color: 'white',
-              marginBottom: '8px',
-              margin: 0
+              marginBottom: '16px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px'
             }}>
-              {currentGame.title}
-            </h1>
-            <p style={{
-              color: '#94a3b8',
-              fontSize: '16px',
-              margin: '8px 0 0 0'
-            }}>
-              Waiting for all players to join and get ready!
-            </p>
-          </motion.div>
+              <Share2 style={{ width: 24, height: 24, color: currentGame.color }} />
+              Employee Access Code
+            </h2>
 
-          <div style={{display: 'grid', gridTemplateColumns: '1fr 400px', gap: '32px'}}>
-            
-            {/* Left Column - Participants */}
-            <div>
-              <motion.div
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.2 }}
-                style={cardStyle}
-              >
-                <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px'}}>
-                  <h3 style={{fontSize: '20px', fontWeight: '600', color: 'white', margin: 0}}>
-                    Team Members ({participants.length})
-                  </h3>
-                  <div style={{
-                    background: readyCount === participants.length ? '#059669' : '#f59e0b',
-                    color: 'white',
-                    padding: '4px 12px',
-                    borderRadius: '16px',
-                    fontSize: '12px',
-                    fontWeight: '600'
-                  }}>
-                    {readyCount}/{participants.length} Ready
-                  </div>
+            <div style={{ marginBottom: '24px' }}>
+              <label style={{ fontSize: '14px', color: '#94a3b8', marginBottom: '8px', display: 'block' }}>
+                Room Code (Share this with your team)
+              </label>
+              <div style={{
+                display: 'flex',
+                gap: '12px',
+                alignItems: 'center'
+              }}>
+                <div style={{
+                  flex: 1,
+                  padding: '20px',
+                  background: 'rgba(34, 197, 94, 0.1)',
+                  border: '2px solid rgba(34, 197, 94, 0.3)',
+                  borderRadius: '12px',
+                  fontFamily: 'monospace',
+                  fontSize: '32px',
+                  fontWeight: 'bold',
+                  textAlign: 'center',
+                  color: '#22c55e',
+                  letterSpacing: '0.3em'
+                }}>
+                  {lobby?.roomCode || 'LOADING'}
                 </div>
-
-                <div style={{display: 'flex', flexDirection: 'column', gap: '12px'}}>
-                  {participants.map((participant, index) => (
-                    <motion.div
-                      key={participant.id}
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: 0.3 + index * 0.1 }}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '16px',
-                        padding: '16px',
-                        background: participant.status === 'ready' 
-                          ? 'rgba(5, 150, 105, 0.1)' 
-                          : 'rgba(245, 158, 11, 0.1)',
-                        border: participant.status === 'ready' 
-                          ? '1px solid rgba(5, 150, 105, 0.3)' 
-                          : '1px solid rgba(245, 158, 11, 0.3)',
-                        borderRadius: '8px',
-                        transition: 'all 0.3s ease'
-                      }}
-                    >
-                      <div style={{fontSize: '32px'}}>{participant.avatar}</div>
-                      <div style={{flex: 1}}>
-                        <div style={{fontWeight: '600', color: 'white', marginBottom: '4px'}}>
-                          {participant.name}
-                        </div>
-                        <div style={{
-                          fontSize: '12px',
-                          color: participant.status === 'ready' ? '#059669' : '#f59e0b',
-                          fontWeight: '500'
-                        }}>
-                          {participant.status === 'ready' ? '✅ Ready to play!' : '⏳ Getting ready...'}
-                        </div>
-                      </div>
-                      {participant.status === 'ready' ? (
-                        <CheckCircle style={{width: '20px', height: '20px', color: '#059669'}} />
-                      ) : (
-                        <Circle style={{width: '20px', height: '20px', color: '#f59e0b'}} />
-                      )}
-                    </motion.div>
-                  ))}
-                </div>
-              </motion.div>
+                <button
+                  onClick={copyRoomCode}
+                  style={{
+                    padding: '20px',
+                    background: copied ? 'rgba(34, 197, 94, 0.2)' : 'rgba(59, 130, 246, 0.2)',
+                    border: `2px solid ${copied ? '#22c55e' : '#3b82f6'}`,
+                    borderRadius: '12px',
+                    color: copied ? '#22c55e' : '#60a5fa',
+                    cursor: 'pointer'
+                  }}
+                >
+                  {copied ? <CheckCircle style={{ width: 24, height: 24 }} /> : <Copy style={{ width: 24, height: 24 }} />}
+                </button>
+              </div>
             </div>
 
-            {/* Right Column - Lobby Info & Controls */}
-            <div>
-              
-              {/* Lobby Code */}
-              <motion.div
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.3 }}
-                style={{...cardStyle, marginBottom: '24px'}}
-              >
-                <h3 style={{fontSize: '18px', fontWeight: '600', color: 'white', marginBottom: '16px'}}>
-                  Share Lobby Code
-                </h3>
+            <div style={{ marginBottom: '24px' }}>
+              <label style={{ fontSize: '14px', color: '#94a3b8', marginBottom: '8px', display: 'block' }}>
+                Direct Join Link
+              </label>
+              <div style={{
+                display: 'flex',
+                gap: '12px'
+              }}>
+                <input
+                  type="text"
+                  value={`${window.location.origin}/join?code=${lobby?.roomCode || 'LOADING'}`}
+                  readOnly
+                  style={{
+                    flex: 1,
+                    padding: '12px',
+                    background: 'rgba(51, 65, 85, 0.3)',
+                    border: '1px solid rgba(71, 85, 105, 0.5)',
+                    borderRadius: '8px',
+                    color: '#cbd5e1',
+                    fontSize: '14px'
+                  }}
+                />
+                <button
+                  onClick={copyJoinLink}
+                  style={{
+                    padding: '12px 16px',
+                    background: 'rgba(59, 130, 246, 0.2)',
+                    border: '1px solid #3b82f6',
+                    borderRadius: '8px',
+                    color: '#60a5fa',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px'
+                  }}
+                >
+                  <ExternalLink style={{ width: 16, height: 16 }} />
+                  Copy
+                </button>
+              </div>
+            </div>
+
+            <div style={{
+              background: 'rgba(34, 197, 94, 0.1)',
+              border: '1px solid rgba(34, 197, 94, 0.3)',
+              borderRadius: '8px',
+              padding: '16px'
+            }}>
+              <h4 style={{ fontSize: '14px', fontWeight: '600', color: '#22c55e', marginBottom: '8px' }}>
+                How employees join:
+              </h4>
+              <ol style={{ fontSize: '12px', color: '#cbd5e1', margin: 0, paddingLeft: '16px' }}>
+                <li>Go to <strong>{window.location.origin}</strong></li>
+                <li>Click <strong>"Join Game"</strong></li>
+                <li>Enter room code: <strong>{lobby?.roomCode || 'LOADING'}</strong></li>
+                <li>Start playing when you begin the session!</li>
+              </ol>
+            </div>
+          </motion.div>
+
+          {/* Employees Joined */}
+          <motion.div
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: 0.2 }}
+            style={{
+              background: 'rgba(51, 65, 85, 0.1)',
+              backdropFilter: 'blur(10px)',
+              border: '1px solid rgba(51, 65, 85, 0.2)',
+              borderRadius: '16px',
+              padding: '32px'
+            }}
+          >
+                        <h2 style={{
+              fontSize: '20px',
+              fontWeight: 'bold',
+              color: 'white',
+              marginBottom: '16px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px'
+            }}>
+              <Users style={{ width: 24, height: 24, color: currentGame.color }} />
+              Employees Joined ({Object.keys(players).length}/{currentGame.maxPlayers})
+            </h2>
+
+            <div style={{ marginBottom: '24px' }}>
+              {Object.keys(players).length > 0 ? Object.values(players).map((player, index) => (
+                <div
+                  key={player.uid}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '12px 16px',
+                    background: 'rgba(34, 197, 94, 0.1)',
+                    border: '1px solid rgba(34, 197, 94, 0.3)',
+                    borderRadius: '8px',
+                    marginBottom: '8px'
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <div style={{
+                      width: 32,
+                      height: 32,
+                      background: `linear-gradient(135deg, ${currentGame.color}, #2563eb)`,
+                      borderRadius: '50%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '14px',
+                      color: 'white',
+                      fontWeight: 'bold'
+                    }}>
+                      {player.name?.charAt(0).toUpperCase() || '?'}
+                    </div>
+                    <div>
+                      <div style={{ fontWeight: '600', color: 'white' }}>
+                        {player.name}
+                      </div>
+                      <div style={{ fontSize: '12px', color: '#22c55e' }}>
+                        Ready to play
+                      </div>
+                    </div>
+                  </div>
+                  <div style={{
+                    width: 8,
+                    height: 8,
+                    background: '#22c55e',
+                    borderRadius: '50%'
+                  }} />
+                </div>
+              )) : (
                 <div style={{
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '12px',
-                  padding: '16px',
-                  background: 'rgba(0,0,0,0.3)',
+                  justifyContent: 'center',
+                  padding: '32px',
+                  background: 'rgba(51, 65, 85, 0.1)',
+                  border: '1px dashed rgba(71, 85, 105, 0.5)',
                   borderRadius: '8px',
-                  border: '2px dashed rgba(168, 85, 247, 0.3)'
+                  color: '#64748b',
+                  textAlign: 'center',
+                  flexDirection: 'column',
+                  gap: '8px'
                 }}>
-                  <div style={{
-                    fontSize: '24px',
-                    fontWeight: 'bold',
-                    color: '#a855f7',
-                    fontFamily: 'monospace',
-                    flex: 1,
-                    textAlign: 'center'
-                  }}>
-                    {lobbyCode}
-                  </div>
-                  <button
-                    onClick={copyLobbyCode}
-                    style={{
-                      ...buttonStyle,
-                      background: 'rgba(168, 85, 247, 0.2)',
-                      color: '#a855f7',
-                      padding: '8px'
-                    }}
-                  >
-                    <Copy style={{width: '16px', height: '16px'}} />
-                  </button>
+                  <UserPlus style={{ width: 24, height: 24 }} />
+                  <div>Waiting for employees to join...</div>
+                  <div style={{ fontSize: '12px' }}>Share the room code above</div>
                 </div>
-                <p style={{fontSize: '12px', color: '#94a3b8', marginTop: '8px', textAlign: 'center'}}>
-                  Send this code to your team members so they can join!
-                </p>
-              </motion.div>
+              )}
 
-              {/* Game Settings Preview */}
-              <motion.div
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.4 }}
-                style={{...cardStyle, marginBottom: '24px'}}
-              >
-                <h3 style={{fontSize: '18px', fontWeight: '600', color: 'white', marginBottom: '16px'}}>
-                  Game Settings
-                </h3>
-                <div style={{display: 'flex', flexDirection: 'column', gap: '12px'}}>
-                  <div style={{display: 'flex', justifyContent: 'space-between'}}>
-                    <span style={{color: '#94a3b8'}}>Tone:</span>
-                    <span style={{color: 'white', fontWeight: '600'}}>
-                      {customizations?.tone || 'Professional'}
-                    </span>
-                  </div>
-                  <div style={{display: 'flex', justifyContent: 'space-between'}}>
-                    <span style={{color: '#94a3b8'}}>Difficulty:</span>
-                    <span style={{color: 'white', fontWeight: '600'}}>
-                      {customizations?.difficulty || 'Medium'}
-                    </span>
-                  </div>
-                  <div style={{display: 'flex', justifyContent: 'space-between'}}>
-                    <span style={{color: '#94a3b8'}}>Duration:</span>
-                    <span style={{color: 'white', fontWeight: '600'}}>
-                      {customizations?.duration || '45'} mins
-                    </span>
-                  </div>
-                  <div style={{display: 'flex', justifyContent: 'space-between'}}>
-                    <span style={{color: '#94a3b8'}}>Team Size:</span>
-                    <span style={{color: 'white', fontWeight: '600'}}>
-                      {customizations?.teamSize || '8'} people
-                    </span>
-                  </div>
-                </div>
-              </motion.div>
-
-              {/* AI Enhancement Notice */}
-              <motion.div
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.5 }}
-                style={{
-                  ...cardStyle,
-                  background: 'linear-gradient(135deg, rgba(168, 85, 247, 0.1), rgba(59, 130, 246, 0.1))',
-                  border: '2px solid rgba(168, 85, 247, 0.3)',
-                  marginBottom: '24px'
-                }}
-              >
-                <div style={{display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px'}}>
-                  <Sparkles style={{width: '20px', height: '20px', color: '#a855f7'}} />
-                  <h4 style={{fontSize: '16px', fontWeight: '600', color: 'white', margin: 0}}>
-                    AI is Ready! 🤖
-                  </h4>
-                </div>
-                <p style={{fontSize: '12px', color: '#cbd5e1', margin: 0}}>
-                  Our AI facilitator will guide the session, provide real-time insights, and generate a personalized team report!
-                </p>
-              </motion.div>
-
-              {/* Start Game Button */}
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.6 }}
-              >
-                <button
-                  onClick={startGame}
-                  disabled={readyCount < participants.length}
+              {/* Empty slots */}
+              {Array.from({ length: Math.max(0, currentGame.maxPlayers - Object.keys(players).length) }).map((_, index) => (
+                <div
+                  key={`empty-${index}`}
                   style={{
-                    ...buttonStyle,
-                    width: '100%',
-                    fontSize: '18px',
-                    padding: '16px',
-                    background: readyCount === participants.length 
-                      ? `linear-gradient(135deg, ${currentGame.color}, ${currentGame.color}dd)`
-                      : 'rgba(51, 65, 85, 0.3)',
-                    color: readyCount === participants.length ? 'white' : '#94a3b8',
-                    cursor: readyCount === participants.length ? 'pointer' : 'not-allowed',
-                    boxShadow: readyCount === participants.length 
-                      ? `0 8px 25px ${currentGame.color}30` 
-                      : 'none',
-                    justifyContent: 'center'
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: '12px 16px',
+                    background: 'rgba(51, 65, 85, 0.1)',
+                    border: '1px dashed rgba(71, 85, 105, 0.5)',
+                    borderRadius: '8px',
+                    marginBottom: '8px',
+                    color: '#64748b',
+                    fontSize: '14px'
                   }}
                 >
-                  {readyCount === participants.length ? (
-                    <>
-                      <Play style={{width: '20px', height: '20px'}} />
-                      Start Game Session! 🚀
-                    </>
-                  ) : (
-                    <>
-                      <Clock style={{width: '20px', height: '20px'}} />
-                      Waiting for all players...
-                    </>
-                  )}
-                </button>
-                
-                {readyCount < participants.length && (
-                  <p style={{
-                    fontSize: '12px',
-                    color: '#94a3b8',
-                    textAlign: 'center',
-                    marginTop: '8px'
-                  }}>
-                    {participants.length - readyCount} more player(s) need to get ready
-                  </p>
-                )}
-              </motion.div>
+                  <UserPlus style={{ width: 16, height: 16, marginRight: '8px' }} />
+                  Open slot for employee...
+                </div>
+              ))}
             </div>
-          </div>
-        </div>
-      </main>
 
-      {/* Global Styles */}
-      <style>
-        {`
-          @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.5; }
-          }
-        `}
-      </style>
+            {/* Start Session Button */}
+            <button
+              onClick={startGameSession_old}
+              disabled={Object.keys(players).length < currentGame.minPlayers || loading}
+              style={{
+                width: '100%',
+                padding: '16px',
+                background: Object.keys(players).length >= currentGame.minPlayers 
+                  ? 'linear-gradient(135deg, #7c3aed, #2563eb)' 
+                  : 'rgba(71, 85, 105, 0.5)',
+                color: 'white',
+                border: 'none',
+                borderRadius: '8px',
+                fontSize: '16px',
+                fontWeight: '600',
+                cursor: Object.keys(players).length >= currentGame.minPlayers ? 'pointer' : 'not-allowed',
+                opacity: Object.keys(players).length >= currentGame.minPlayers ? 1 : 0.5,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px'
+              }}
+            >
+              {loading ? (
+                <Loader2 style={{ width: 20, height: 20 }} />
+              ) : (
+                <Eye style={{ width: 20, height: 20 }} />
+              )}
+              {Object.keys(players).length >= currentGame.minPlayers 
+                ? 'Start Session & Observe' 
+                : `Need ${currentGame.minPlayers - Object.keys(players).length} more employees`
+              }
+            </button>
+
+            {Object.keys(players).length >= currentGame.minPlayers && (
+              <div style={{
+                marginTop: '16px',
+                padding: '12px',
+                background: 'rgba(34, 197, 94, 0.1)',
+                border: '1px solid rgba(34, 197, 94, 0.3)',
+                borderRadius: '8px',
+                textAlign: 'center',
+                fontSize: '14px',
+                color: '#22c55e'
+              }}>
+                ✅ Ready to start! You'll observe the session and receive AI insights.
+              </div>
+            )}
+          </motion.div>
+        </div>
+      </div>
     </div>
   )
 }

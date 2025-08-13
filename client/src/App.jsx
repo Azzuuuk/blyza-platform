@@ -1,8 +1,10 @@
-import React, { Suspense, lazy } from 'react'
+import React, { Suspense, lazy, useEffect } from 'react'
 import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Toaster } from 'react-hot-toast'
 import ErrorBoundary from './components/ErrorBoundary'
+import { setupAuthListener } from './services/firebaseAuth'
+import { useAuthStore } from './stores/useAuthStore'
 
 // Pages (lazy-loaded to prevent whole-app crashes on import errors)
 const HomePage = lazy(() => import('./pages/HomePageNew'))
@@ -20,10 +22,14 @@ const GameplayPage = lazy(() => import('./pages/GameplayPage'))
 const ManagerFeedback = lazy(() => import('./pages/ManagerFeedback'))
 const ResultsPage = lazy(() => import('./pages/ResultsPage'))
 const GameSimulation = lazy(() => import('./pages/GameSimulationNew'))
+const PostGameRouter = lazy(() => import('./components/PostGameRouter'))
+const LoginPage = lazy(() => import('./pages/LoginPage'))
+const SignupPage = lazy(() => import('./pages/SignupPage'))
+const QuickGames = lazy(() => import('./pages/QuickGames'))
 
 // Games
 const CodeBreakersTeamGame = lazy(() => import('./games/CodeBreakers/CodeBreakersTeamGame'))
-import ProtectedRoute from './components/ProtectedRoute'
+import AuthGuard from './components/AuthGuard'
 import PageLoader from './components/PageLoader'
 
 // Create a client
@@ -43,29 +49,33 @@ function RoutesWithBoundary() {
       <Suspense fallback={<PageLoader label="Loading page…" />}> 
         <Routes>
             <Route path="/" element={<HomePage />} />
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="/signup" element={<SignupPage />} />
+            <Route path="/quick-games" element={<QuickGames />} />
             <Route path="/game-intent" element={<GameIntent />} />
             <Route path="/games" element={<GameCatalog />} />
             <Route path="/games/:gameId/customize" element={<GameCustomization />} />
-            <Route path="/lobby/create" element={<ProtectedRoute><LobbyCreation /></ProtectedRoute>} />
-            <Route path="/lobby/:lobbyId" element={<ProtectedRoute><LobbyPage /></ProtectedRoute>} />
+            <Route path="/lobby/create" element={<AuthGuard><LobbyCreation /></AuthGuard>} />
+            <Route path="/lobby/:lobbyId" element={<AuthGuard><LobbyPage /></AuthGuard>} />
             <Route path="/game/simulation" element={<GameSimulation />} />
             <Route path="/game/analysis" element={<GameAnalysis />} />
             <Route path="/game/:sessionId" element={<GameplayPage />} />
             <Route path="/manager-feedback" element={<ManagerFeedback />} />
             <Route path="/ai-analysis-report" element={<AIAnalysisReport />} />
+            <Route path="/post-game" element={<PostGameRouter />} />
             {/* Results aliases */}
             <Route path="/results/:sessionId" element={<ResultsPage />} />
             <Route path="/results" element={<ResultsPage />} />
             <Route path="/rewards" element={<RewardsStore />} />
-            {/* Join game aliases */}
-            <Route path="/join/:roomCode?" element={<ProtectedRoute><JoinGame /></ProtectedRoute>} />
-            <Route path="/join-game" element={<ProtectedRoute><JoinGame /></ProtectedRoute>} />
-            <Route path="/dashboard" element={<ProtectedRoute><ManagerDashboard /></ProtectedRoute>} />
+            {/* Join game aliases - Should NOT require auth for employees */}
+            <Route path="/join/:roomCode?" element={<JoinGame />} />
+            <Route path="/join-game" element={<JoinGame />} />
+            <Route path="/dashboard" element={<AuthGuard><ManagerDashboard /></AuthGuard>} />
             
             {/* Game Routes */}
-            <Route path="/games/code-breakers" element={<ProtectedRoute><CodeBreakersTeamGame /></ProtectedRoute>} />
-            <Route path="/games/code-breakers/play" element={<ProtectedRoute><CodeBreakersTeamGame /></ProtectedRoute>} />
-            <Route path="/games/code-breakers/team" element={<ProtectedRoute><CodeBreakersTeamGame /></ProtectedRoute>} />
+            <Route path="/games/code-breakers" element={<AuthGuard><CodeBreakersTeamGame /></AuthGuard>} />
+            <Route path="/games/code-breakers/play" element={<AuthGuard><CodeBreakersTeamGame /></AuthGuard>} />
+            <Route path="/games/code-breakers/team" element={<AuthGuard><CodeBreakersTeamGame /></AuthGuard>} />
             
             {/* Test Route */}
             <Route path="/test" element={<div style={{padding: '20px', color: 'white', background: '#1a1a2e', minHeight: '100vh'}}>✅ Test Route Working!</div>} />
@@ -144,6 +154,18 @@ function RoutesWithBoundary() {
 
 function App() {
   console.log('App with FULL platform restored...')
+  const { initializeAuth } = useAuthStore()
+
+  useEffect(() => {
+    console.log('🔥 Setting up Firebase auth listener...')
+    const unsubscribe = setupAuthListener((user) => {
+      console.log('🔥 Auth state changed:', user)
+      initializeAuth(user)
+    })
+
+    return () => unsubscribe()
+  }, [initializeAuth])
+
   return (
     <QueryClientProvider client={queryClient}>
       <Router>

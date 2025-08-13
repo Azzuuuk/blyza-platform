@@ -10,41 +10,48 @@ import {
   Sparkles,
   Loader2
 } from 'lucide-react'
-import { api } from '../services/api'
+import { joinGameSession } from '../services/firebaseMultiplayer'
+import { useAuthStore } from '../stores/useAuthStore'
 import toast from 'react-hot-toast'
 
 const JoinGame = () => {
   const navigate = useNavigate()
+  const { user } = useAuthStore()
   const [roomCode, setRoomCode] = useState('')
-  const [playerName, setPlayerName] = useState('')
   const [isJoining, setIsJoining] = useState(false)
 
   const handleJoinGame = async (e) => {
     e.preventDefault()
 
-    if (!roomCode.trim() || !playerName.trim()) {
-      toast.error('Please enter both room code and your name')
+    if (!roomCode.trim()) {
+      toast.error('Please enter a room code')
+      return
+    }
+
+    if (!user) {
+      toast.error('Please sign in to join a game')
+      navigate('/login')
       return
     }
 
     setIsJoining(true)
 
     try {
-      const response = await api.joinLobby(roomCode.trim().toUpperCase(), playerName.trim())
+      console.log('🔥 Attempting to join session:', roomCode.trim().toUpperCase())
+      console.log('🔥 Player user:', user)
+      
+      const result = await joinGameSession(roomCode.trim().toUpperCase(), user)
+      console.log('🔥 Join result:', result)
 
-      if (response.success) {
+      if (result.success) {
         toast.success('Joined lobby successfully!')
-
-        // Store player info in localStorage
-        localStorage.setItem('playerId', response.playerId)
-        localStorage.setItem('playerName', playerName.trim())
-
-        // Navigate to lobby
-        navigate(`/lobby/${response.lobby.id}`)
+        navigate(`/lobby/${result.sessionId}`)
+      } else {
+        toast.error(result.error || 'Failed to join game. Please check the room code.')
       }
     } catch (error) {
-      console.error('Join error:', error)
-      toast.error(error.error || 'Failed to join game. Please check the room code.')
+      console.error('❌ Join error:', error)
+      toast.error('Failed to join game. Please check the room code.')
     } finally {
       setIsJoining(false)
     }
@@ -187,33 +194,17 @@ const JoinGame = () => {
             </div>
 
             <div style={{ marginBottom: 24 }}>
-              <label htmlFor="playerName" style={{ display: 'block', fontSize: 14, fontWeight: 600, color: '#e2e8f0', marginBottom: 12 }}>Your Name</label>
-              <input
-                id="playerName"
-                type="text"
-                value={playerName}
-                onChange={(e) => setPlayerName(e.target.value)}
-                placeholder="Enter your display name"
-                style={{
-                  width: '100%',
-                  padding: '12px 16px',
-                  background: 'rgba(51, 65, 85, 0.3)',
-                  border: '1px solid rgba(71, 85, 105, 0.5)',
-                  borderRadius: '8px',
-                  color: '#e2e8f0'
-                }}
-                maxLength={30}
-                disabled={isJoining}
-              />
-              <p style={{ fontSize: 12, color: '#94a3b8', marginTop: 8 }}>This name will be visible to other players</p>
+              <p style={{ fontSize: 14, color: '#22c55e', margin: 0, padding: '12px 16px', background: 'rgba(34, 197, 94, 0.1)', border: '1px solid rgba(34, 197, 94, 0.3)', borderRadius: '8px' }}>
+                Joining as: <strong>{user?.name || 'Player'}</strong> ({user?.role || 'employee'})
+              </p>
             </div>
 
             <button
               type="submit"
-              disabled={!roomCode.trim() || !playerName.trim() || isJoining}
+              disabled={!roomCode.trim() || isJoining}
               style={{
                 width: '100%',
-                background: !roomCode.trim() || !playerName.trim() || isJoining 
+                background: !roomCode.trim() || isJoining 
                   ? 'rgba(71, 85, 105, 0.5)' 
                   : 'linear-gradient(135deg, #7c3aed, #2563eb)',
                 color: 'white',
@@ -222,8 +213,8 @@ const JoinGame = () => {
                 fontSize: '18px',
                 fontWeight: '600',
                 border: 'none',
-                cursor: !roomCode.trim() || !playerName.trim() || isJoining ? 'not-allowed' : 'pointer',
-                opacity: !roomCode.trim() || !playerName.trim() || isJoining ? 0.5 : 1,
+                cursor: !roomCode.trim() || isJoining ? 'not-allowed' : 'pointer',
+                opacity: !roomCode.trim() || isJoining ? 0.5 : 1,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',

@@ -2,13 +2,12 @@ import { lobbies } from '../routes/lobby.js';
 import { gameTemplates } from '../data/gameTemplates.js';
 
 /**
- * Real-time game engine using Socket.IO
+ * Game engine for managing game sessions (Firebase-based multiplayer)
  */
 export class GameEngine {
-  constructor(io) {
-    this.io = io;
+  constructor() {
     this.activeSessions = new Map(); // sessionId -> gameState
-    this.playerSockets = new Map(); // playerId -> socketId
+    // Note: Real-time updates now handled by Firebase RTDB instead of Socket.io
   }
 
   /**
@@ -45,9 +44,10 @@ export class GameEngine {
     lobby.status = 'in-progress';
 
     // Notify all players
-    this.io.to(`lobby_${lobbyId}`).emit('game_started', {
+    // Emit game started event (now handled by Firebase RTDB)
+    console.log(`🎮 Game started for lobby ${lobbyId}:`, {
       sessionId,
-      gameState: this.getPublicGameState(gameState)
+      gameTemplate: gameTemplate.title
     });
 
     // Start first round after a delay
@@ -111,14 +111,8 @@ export class GameEngine {
       gameState.gameData.responses.clear();
     }
 
-    this.io.to(`lobby_${gameState.lobbyId}`).emit('round_started', {
-      round: gameState.currentRound,
-      totalRounds: gameState.totalRounds,
-      roundData,
-      timeLimit: gameState.timePerRound
-    });
-
-    // Set round timer
+    // Emit round started event (now handled by Firebase RTDB)
+    console.log(`🔄 Round ${gameState.currentRound} started for session ${sessionId}`);    // Set round timer
     setTimeout(() => {
       this.endRound(sessionId);
     }, gameState.timePerRound * 1000);
@@ -203,14 +197,8 @@ export class GameEngine {
     this.handleGameSpecificResponse(gameState, responseData);
 
     // Notify other players of response submission (without revealing content)
-    this.io.to(`lobby_${gameState.lobbyId}`).emit('response_submitted', {
-      playerId,
-      playerName: player.name,
-      responseCount: gameState.gameData.responses.size,
-      totalPlayers: gameState.players.length
-    });
-
-    return { success: true };
+    // Emit response submitted event (now handled by Firebase RTDB)
+    console.log(`📝 Response submitted by ${playerId} for session ${sessionId}`);    return { success: true };
   }
 
   /**
@@ -254,17 +242,8 @@ export class GameEngine {
     
     const roundResults = this.calculateRoundResults(gameState);
 
-    this.io.to(`lobby_${gameState.lobbyId}`).emit('round_ended', {
-      round: gameState.currentRound,
-      results: roundResults,
-      scores: gameState.players.map(p => ({
-        playerId: p.id,
-        playerName: p.name,
-        score: p.score
-      }))
-    });
-
-    // Check if game is complete
+    // Emit round ended event (now handled by Firebase RTDB)
+    console.log(`✅ Round ${gameState.currentRound} ended for session ${sessionId}`);    // Check if game is complete
     if (gameState.currentRound >= gameState.totalRounds) {
       setTimeout(() => {
         this.endGame(sessionId);
@@ -323,18 +302,8 @@ export class GameEngine {
 
     const finalResults = this.calculateFinalResults(gameState);
 
-    this.io.to(`lobby_${gameState.lobbyId}`).emit('game_ended', {
-      sessionId,
-      results: finalResults,
-      duration: this.calculateGameDuration(gameState),
-      nextSteps: {
-        report: true,
-        rewards: true,
-        playAgain: true
-      }
-    });
-
-    // Update lobby status
+    // Emit game ended event (now handled by Firebase RTDB)
+    console.log(`🏁 Game ended for session ${sessionId}`);    // Update lobby status
     const lobby = lobbies.get(gameState.lobbyId);
     if (lobby) {
       lobby.status = 'completed';
