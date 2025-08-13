@@ -30,6 +30,16 @@ export async function recordEvent({ sessionId, type, payload }) {
   )
 }
 
+export async function listSessionEvents({ sessionId, limit=100 }) {
+  const res = await query(`SELECT id, type, payload, created_at FROM session_events WHERE session_id=$1 ORDER BY id DESC LIMIT $2`, [sessionId, limit])
+  return res.rows
+}
+
+export async function sessionEventAnalytics({ sessionId }) {
+  const res = await query(`SELECT type, COUNT(*)::int as count, MIN(created_at) as first_at, MAX(created_at) as last_at FROM session_events WHERE session_id=$1 GROUP BY type ORDER BY COUNT(*) DESC`, [sessionId])
+  return res.rows
+}
+
 export async function updateSnapshot({ sessionId, snapshot, version, checksum }) {
   await query(
     `UPDATE sessions SET latest_snapshot=$2, snapshot_version=$3, snapshot_checksum=$4, updated_at=now() WHERE id=$1`,

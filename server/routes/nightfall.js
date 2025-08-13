@@ -219,6 +219,32 @@ router.get('/sessions/:id/metrics', (req,res) => {
   res.json({ success:true, metrics })
 })
 
+// List recent events
+router.get('/sessions/:id/events', requireKey, async (req,res) => {
+  const { id } = req.params
+  const r = await ensureRepo()
+  if(!r?.listSessionEvents) return res.status(503).json({ success:false, error:'events unavailable' })
+  try {
+    const events = await r.listSessionEvents({ sessionId: id, limit: parseInt(req.query.limit)||100 })
+    res.json({ success:true, events })
+  } catch (e) {
+    res.status(500).json({ success:false, error: e.message })
+  }
+})
+
+// Event analytics summary
+router.get('/sessions/:id/events/summary', requireKey, async (req,res) => {
+  const { id } = req.params
+  const r = await ensureRepo()
+  if(!r?.sessionEventAnalytics) return res.status(503).json({ success:false, error:'event analytics unavailable' })
+  try {
+    const summary = await r.sessionEventAnalytics({ sessionId: id })
+    res.json({ success:true, summary })
+  } catch (e) {
+    res.status(500).json({ success:false, error: e.message })
+  }
+})
+
 // Player event capture (generic) for analytics (persists to session_events)
 router.post('/sessions/:id/events', requireKey, async (req,res) => {
   const { id } = req.params
