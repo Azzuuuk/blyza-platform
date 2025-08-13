@@ -17,7 +17,7 @@ if(process.env.AUTO_MIGRATE === 'true') {
 }
 
 // Synchronous (eager) route imports for production reliability (lazy loading caused 404 races on Railway)
-let authRoutes, gameRoutes, lobbyRoutes, analyticsRoutes, reportsRoutes, rewardsRoutes, dashboardRoutes, nightfallRoutes;
+let authRoutes, gameRoutes, lobbyRoutes, analyticsRoutes, reportsRoutes, rewardsRoutes, dashboardRoutes, nightfallRoutes, mvpRoutes;
 try { authRoutes = (await import('./routes/auth.js')).default } catch {}
 try { gameRoutes = (await import('./routes/games.js')).default } catch {}
 try { lobbyRoutes = (await import('./routes/lobby.js')).default } catch {}
@@ -26,6 +26,7 @@ try { reportsRoutes = (await import('./routes/reports.js')).default } catch {}
 try { rewardsRoutes = (await import('./routes/rewards.js')).default } catch {}
 try { dashboardRoutes = (await import('./routes/dashboard.js')).default } catch {}
 try { nightfallRoutes = (await import('./routes/nightfall.js')).default } catch {}
+try { mvpRoutes = (await import('./routes/mvp.js')).default } catch {}
 
 // Import services
 import { initializeFirebase } from './services/firebase.js';
@@ -61,7 +62,8 @@ const routeStatus = {
   reports: false,
   rewards: false,
   dashboard: false,
-  nightfall: false
+  nightfall: false,
+  mvp: false
 };
 
 // Capture recent requests for troubleshooting (in-memory, volatile)
@@ -216,6 +218,7 @@ const setupRoutes = () => {
   routeStatus.rewards = !!rewardsRoutes;
   routeStatus.dashboard = !!dashboardRoutes;
   routeStatus.nightfall = !!nightfallRoutes;
+  routeStatus.mvp = !!mvpRoutes;
 
   if (authRoutes) app.use('/api/auth', authRoutes);
   if (gameRoutes) app.use('/api/games', gameRoutes);
@@ -225,6 +228,7 @@ const setupRoutes = () => {
   if (rewardsRoutes) app.use('/api/rewards', rewardsRoutes);
   if (dashboardRoutes) app.use('/api/dashboard', dashboardRoutes);
   if (nightfallRoutes) app.use('/api/nightfall', nightfallRoutes);
+  if (mvpRoutes) app.use('/api/mvp', mvpRoutes);
 
   console.log('✅ API routes mounted (eager)', routeStatus);
 };
