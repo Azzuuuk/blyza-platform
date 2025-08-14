@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { 
   ArrowLeft,
@@ -18,6 +18,8 @@ const JoinGame = () => {
   const navigate = useNavigate()
   const { user } = useAuthStore()
   const [roomCode, setRoomCode] = useState('')
+  const params = useParams()
+  const [search] = useSearchParams()
   const [isJoining, setIsJoining] = useState(false)
 
   const handleJoinGame = async (e) => {
@@ -56,6 +58,14 @@ const JoinGame = () => {
       setIsJoining(false)
     }
   }
+
+  // Pre-fill code from URL
+  React.useEffect(() => {
+    const fromPath = params.roomCode
+    const fromQuery = search.get('code')
+    const code = (fromPath || fromQuery || '').toString().toUpperCase()
+    if (code && !roomCode) setRoomCode(code)
+  }, [params.roomCode, search])
 
   return (
     <div style={{

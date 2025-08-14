@@ -3,17 +3,18 @@
  * Handles real-time game sessions, player actions, and manager monitoring
  */
 
-import { 
-  ref, 
-  push, 
-  set, 
-  update, 
-  onValue, 
-  off, 
+import {
+  ref,
+  push,
+  set,
+  update,
+  onValue,
+  off,
   remove,
   serverTimestamp,
   child,
-  get
+  get,
+  onDisconnect
 } from 'firebase/database'
 import { rtdb } from '../lib/firebase'
 
@@ -25,47 +26,56 @@ const generateRoomCode = () => {
 }
 
 /**
- * Create a new game session
+ * Create a new Nightfall lobby (manager only)
  */
-export const createGameSession = async (gameType, hostUser, maxPlayers = 6) => {
+export const createGameSession = async (gameType, hostUser, maxPlayers = 4) => {
   try {
     const roomCode = generateRoomCode()
-    const sessionRef = push(ref(rtdb, 'gameSessions'))
+    const sessionRef = push(ref(rtdb, 'lobbies'))
     const sessionId = sessionRef.key
 
     const sessionData = {
       id: sessionId,
-      roomCode,
-      gameType,
-      host: {
-        uid: hostUser.uid,
-        name: hostUser.name,
-        role: hostUser.role
-      },
-      status: 'waiting', // waiting, active, completed
+      code: roomCode,
+      game: gameType || 'nightfall',
+      managerUid: hostUser.uid,
+      status: 'lobby', // lobby | in_progress | finished
       maxPlayers,
       createdAt: serverTimestamp(),
-      players: {},
-      gameState: {
-        phase: 'lobby', // lobby, playing, results
-        startedAt: null,
-        currentRound: 0,
-        scores: {},
-        actions: {}
-      },
-      settings: {
-        timeLimit: 600, // 10 minutes default
-        difficulty: 'medium'
-      }
+      startedAt: null,
+      endedAt: null,
+      players: {}
     }
 
     await set(sessionRef, sessionData)
+
+    // Add manager to players list
+    const managerPlayerRef = ref(rtdb, `lobbies/${sessionId}/players/${hostUser.uid}`)
+    await set(managerPlayerRef, {
+      displayName: hostUser.name,
+      connected: true,
+      role: 'manager',
+      ready: true,
+      joinedAt: serverTimestamp(),
+      lastSeen: serverTimestamp()
+    })
+
+    // Initialize game container
+    const gameRef = ref(rtdb, `games/nightfall/${sessionId}`)
+    await set(gameRef, {
+      game: {
+        phase: 'LOBBY',
+        turn: 0,
+        timers: {},
+        progress: { percent: 0, roomsCompleted: 0 }
+      }
+    })
 
     return {
       success: true,
       session: {
         id: sessionId,
-        roomCode,
+        code: roomCode,
         ...sessionData
       }
     }
@@ -85,8 +95,8 @@ export const joinGameSession = async (roomCode, playerUser) => {
   try {
     console.log('🔥 JOIN: Starting join process:', { roomCode, playerUser })
     
-    // Find session by room code
-    const sessionsRef = ref(rtdb, 'gameSessions')
+    // Find lobby by room code
+    const sessionsRef = ref(rtdb, 'lobbies')
     console.log('🔥 JOIN: Reading sessions from Firebase...')
     
     const snapshot = await get(sessionsRef)
@@ -106,7 +116,7 @@ export const joinGameSession = async (roomCode, playerUser) => {
           status: session.status 
         })
         
-        if (session.roomCode === roomCode && session.status === 'waiting') {
+        if (session.code === roomCode && session.status === 'lobby') {
           targetSessionId = sessionId
           targetSession = session
           console.log('✅ JOIN: Found matching session!')
@@ -119,7 +129,7 @@ export const joinGameSession = async (roomCode, playerUser) => {
       console.error('❌ JOIN: No session found for room code:', roomCode)
       return {
         success: false,
-        error: 'Game session not found or already started'
+        error: 'Lobby not found or already started'
       }
     }
 
@@ -136,20 +146,28 @@ export const joinGameSession = async (roomCode, playerUser) => {
       }
     }
 
-    // Add player to session
-    const playerData = {
-      uid: playerUser.uid,
-      name: playerUser.name,
-      role: playerUser.role,
+    // Add player to lobby with presence
+    const playerRef = ref(rtdb, `lobbies/${targetSessionId}/players/${playerUser.uid}`)
+    await set(playerRef, {
+      displayName: playerUser.name,
+      connected: true,
+      role: playerUser.role || null,
+      ready: false,
       joinedAt: serverTimestamp(),
-      status: 'connected',
-      score: 0
-    }
+      lastSeen: serverTimestamp()
+    })
 
-    console.log('🔥 JOIN: Adding player to session:', playerData)
-    
-    const playerRef = ref(rtdb, `gameSessions/${targetSessionId}/players/${playerUser.uid}`)
-    await update(playerRef, playerData)
+    // Setup presence onDisconnect
+    try {
+      const connRef = ref(rtdb, `.info/connected`)
+      onValue(connRef, (snap) => {
+        if (snap.val() === true) {
+          onDisconnect(playerRef).update({ connected: false, lastSeen: serverTimestamp() })
+        }
+      })
+    } catch {}
+
+    console.log('🔥 JOIN: Player added to lobby')
     
     console.log('✅ JOIN: Successfully joined session!')
 
@@ -171,11 +189,11 @@ export const joinGameSession = async (roomCode, playerUser) => {
 }
 
 /**
- * Start a game session
+ * Start Nightfall game (manager only)
  */
 export const startGameSession = async (sessionId, hostUid) => {
   try {
-    const sessionRef = ref(rtdb, `gameSessions/${sessionId}`)
+    const sessionRef = ref(rtdb, `lobbies/${sessionId}`)
     const snapshot = await get(sessionRef)
 
     if (!snapshot.exists()) {
@@ -188,18 +206,47 @@ export const startGameSession = async (sessionId, hostUid) => {
     const session = snapshot.val()
     
     // Verify host permissions
-    if (session.host.uid !== hostUid) {
+    if (session.managerUid !== hostUid) {
       return {
         success: false,
         error: 'Only the host can start the game'
       }
     }
 
+    // Assign roles deterministically based on join order
+    const playerEntries = Object.entries(session.players || {}).filter(([uid]) => uid !== hostUid)
+    const playerCount = playerEntries.length
+    const roleSets = {
+      2: ['lead', 'analyst'],
+      3: ['lead', 'analyst', 'operative'],
+      4: ['lead', 'analyst', 'operative', 'specialist']
+    }
+    const roles = roleSets[Math.min(4, Math.max(2, playerCount))] || roleSets[2]
+    const assignments = {}
+    playerEntries.slice(0, 4).forEach(([uid], idx) => {
+      assignments[uid] = roles[idx] || 'operative'
+    })
+
+    // Persist role assignments
+    await Promise.all(Object.entries(assignments).map(([uid, role]) =>
+      update(ref(rtdb, `lobbies/${sessionId}/players/${uid}`), { role })
+    ))
+
+    // Initialize game state
+    const gameRef = ref(rtdb, `games/nightfall/${sessionId}`)
+    await update(gameRef, {
+      game: {
+        phase: 'IN_PROGRESS',
+        turn: 1,
+        timers: {},
+        progress: { percent: 0, roomsCompleted: 0 }
+      }
+    })
+
     // Update session status
     await update(sessionRef, {
-      status: 'active',
-      'gameState/phase': 'playing',
-      'gameState/startedAt': serverTimestamp()
+      status: 'in_progress',
+      startedAt: serverTimestamp()
     })
 
     return {
@@ -220,7 +267,7 @@ export const startGameSession = async (sessionId, hostUid) => {
  */
 export const updatePlayerAction = async (sessionId, playerId, action) => {
   try {
-    const actionRef = ref(rtdb, `gameSessions/${sessionId}/gameState/actions/${playerId}`)
+    const actionRef = ref(rtdb, `games/nightfall/${sessionId}/eventsLog/${playerId}`)
     const actionData = {
       ...action,
       timestamp: serverTimestamp(),
@@ -246,7 +293,7 @@ export const updatePlayerAction = async (sessionId, playerId, action) => {
  */
 export const updatePlayerScore = async (sessionId, playerId, score) => {
   try {
-    await update(ref(rtdb, `gameSessions/${sessionId}/gameState/scores/${playerId}`), {
+    await update(ref(rtdb, `games/nightfall/${sessionId}/scores/${playerId}`), {
       score,
       updatedAt: serverTimestamp()
     })
@@ -264,10 +311,10 @@ export const updatePlayerScore = async (sessionId, playerId, score) => {
 }
 
 /**
- * Subscribe to game session updates
+ * Subscribe to lobby updates
  */
-export const subscribeToGameSession = (sessionId, callback) => {
-  const sessionRef = ref(rtdb, `gameSessions/${sessionId}`)
+export const subscribeToLobby = (sessionId, callback) => {
+  const sessionRef = ref(rtdb, `lobbies/${sessionId}`)
   
   onValue(sessionRef, (snapshot) => {
     if (snapshot.exists()) {
@@ -291,7 +338,7 @@ export const subscribeToGameSession = (sessionId, callback) => {
  * Subscribe to game state changes (for real-time updates)
  */
 export const subscribeToGameState = (sessionId, callback) => {
-  const gameStateRef = ref(rtdb, `gameSessions/${sessionId}/gameState`)
+  const gameStateRef = ref(rtdb, `games/nightfall/${sessionId}`)
   
   onValue(gameStateRef, (snapshot) => {
     if (snapshot.exists()) {
@@ -310,7 +357,7 @@ export const subscribeToGameState = (sessionId, callback) => {
  * Subscribe to player list changes
  */
 export const subscribeToPlayers = (sessionId, callback) => {
-  const playersRef = ref(rtdb, `gameSessions/${sessionId}/players`)
+  const playersRef = ref(rtdb, `lobbies/${sessionId}/players`)
   
   onValue(playersRef, (snapshot) => {
     const players = snapshot.val() || {}
@@ -329,14 +376,16 @@ export const subscribeToPlayers = (sessionId, callback) => {
  */
 export const completeGameSession = async (sessionId, finalScores, gameData) => {
   try {
-    const sessionRef = ref(rtdb, `gameSessions/${sessionId}`)
+    const sessionRef = ref(rtdb, `lobbies/${sessionId}`)
     
     await update(sessionRef, {
-      status: 'completed',
-      'gameState/phase': 'results',
-      'gameState/completedAt': serverTimestamp(),
-      'gameState/finalScores': finalScores,
-      'gameState/finalData': gameData
+      status: 'finished',
+      endedAt: serverTimestamp()
+    })
+
+    await update(ref(rtdb, `games/nightfall/${sessionId}`), {
+      summary: { finalScores, finalData: gameData, completedAt: serverTimestamp() },
+      game: { phase: 'COMPLETE' }
     })
 
     return {
@@ -356,7 +405,7 @@ export const completeGameSession = async (sessionId, finalScores, gameData) => {
  */
 export const leaveGameSession = async (sessionId, playerId) => {
   try {
-    await remove(ref(rtdb, `gameSessions/${sessionId}/players/${playerId}`))
+    await remove(ref(rtdb, `lobbies/${sessionId}/players/${playerId}`))
     
     return {
       success: true
@@ -375,7 +424,7 @@ export const leaveGameSession = async (sessionId, playerId) => {
  */
 export const getUserActiveSessions = async (userId) => {
   try {
-    const sessionsRef = ref(rtdb, 'gameSessions')
+    const sessionsRef = ref(rtdb, 'lobbies')
     const snapshot = await get(sessionsRef)
     
     const activeSessions = []
@@ -384,8 +433,8 @@ export const getUserActiveSessions = async (userId) => {
       const sessions = snapshot.val()
       for (const [sessionId, session] of Object.entries(sessions)) {
         // Check if user is host or player in active session
-        if (session.status === 'active' && 
-            (session.host.uid === userId || 
+        if (session.status === 'in_progress' &&
+            (session.managerUid === userId ||
              (session.players && session.players[userId]))) {
           activeSessions.push({ id: sessionId, ...session })
         }
@@ -404,3 +453,6 @@ export const getUserActiveSessions = async (userId) => {
     }
   }
 }
+
+/** Backwards compatibility alias */
+export const subscribeToGameSession = subscribeToLobby

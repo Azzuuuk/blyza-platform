@@ -2,6 +2,9 @@ import React, { useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { ArrowLeft, Users, Clock, Settings, Play } from 'lucide-react'
+import toast from 'react-hot-toast'
+import { useAuthStore } from '../stores/useAuthStore'
+import { createGameSession } from '../services/firebaseMultiplayer'
 
 const CreateLobby = () => {
   const navigate = useNavigate()
@@ -14,11 +17,28 @@ const CreateLobby = () => {
     isPrivate: false,
     waitTime: '2'
   })
+  const { user } = useAuthStore()
+  const [creating, setCreating] = useState(false)
 
-  const handleCreateLobby = () => {
-    // In a real app, this would create a lobby via API
-    const lobbyId = `lobby_${Date.now()}`
-    navigate(`/lobby/${lobbyId}`, { state: { gameId, settings: lobbySettings } })
+  const handleCreateLobby = async () => {
+    if (!user || user.role !== 'manager') {
+      toast.error('Only managers can create lobbies')
+      return
+    }
+    setCreating(true)
+    try {
+      const result = await createGameSession('nightfall', { uid: user.uid, name: user.name, role: user.role }, Math.min(4, Math.max(2, lobbySettings.maxPlayers)))
+      if (result.success) {
+        toast.success('Lobby created')
+        navigate(`/lobby/${result.session.id}`, { state: { gameId, settings: lobbySettings, roomCode: result.session.code } })
+      } else {
+        toast.error(result.error || 'Failed to create lobby')
+      }
+    } catch (e) {
+      toast.error(e.message || 'Failed to create lobby')
+    } finally {
+      setCreating(false)
+    }
   }
 
   return (
@@ -134,11 +154,11 @@ const CreateLobby = () => {
 
             <button
               onClick={handleCreateLobby}
-              disabled={!lobbySettings.lobbyName.trim()}
+              disabled={!lobbySettings.lobbyName.trim() || creating}
               className="w-full btn-primary py-4 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
             >
               <Play className="w-5 h-5" />
-              <span>Create Lobby</span>
+              <span>{creating ? 'Creating...' : 'Create Lobby'}</span>
             </button>
           </div>
         </motion.div>
