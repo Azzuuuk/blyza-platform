@@ -1,7 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-// ...other imports (icons, motion, etc.)
+import { ArrowLeft, Monitor, Loader2, Eye, UserPlus, CheckCircle, Copy } from 'lucide-react';
+import { motion } from 'framer-motion';
 
 function LobbyCreation(props) {
   // ...existing logic (state, hooks, etc.)
