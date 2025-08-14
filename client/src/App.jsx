@@ -19,6 +19,10 @@ const JoinGame = lazy(() => import('./pages/JoinGame'))
 const RewardsStore = lazy(() => import('./pages/RewardsStore'))
 const GameAnalysis = lazy(() => import('./pages/GameAnalysis'))
 const GameplayPage = lazy(() => import('./pages/GameplayPage'))
+// Nightfall v2 simple routes (temporary wiring)
+const NightfallManager = lazy(() => import('./games/nightfall_v2/pages/Manager'))
+const NightfallLobby = lazy(() => import('./games/nightfall_v2/pages/Lobby'))
+const NightfallPlay = lazy(() => import('./games/nightfall_v2/pages/Play'))
 const ManagerFeedback = lazy(() => import('./pages/ManagerFeedback'))
 const ResultsPage = lazy(() => import('./pages/ResultsPage'))
 const GameSimulation = lazy(() => import('./pages/GameSimulationNew'))
@@ -60,6 +64,10 @@ function RoutesWithBoundary() {
             <Route path="/game/simulation" element={<GameSimulation />} />
             <Route path="/game/analysis" element={<GameAnalysis />} />
             <Route path="/game/:sessionId" element={<GameplayPage />} />
+            {/* v2 routes */}
+            <Route path="/nightfall/manager" element={<AuthGuard><NightfallManager user={{}} /></AuthGuard>} />
+            <Route path="/nightfall/lobby/:sessionId" element={<AuthGuard><NightfallLobby sessionId={''} /></AuthGuard>} />
+            <Route path="/nightfall/play/:sessionId" element={<AuthGuard><NightfallPlay sessionId={''} user={{}} /></AuthGuard>} />
             <Route path="/manager-feedback" element={<ManagerFeedback />} />
             <Route path="/ai-analysis-report" element={<AIAnalysisReport />} />
             <Route path="/post-game" element={<PostGameRouter />} />

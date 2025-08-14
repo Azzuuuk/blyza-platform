@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { 
   Download, 
@@ -17,6 +18,7 @@ import {
 } from 'lucide-react'
 
 const ManagerDashboardNew = () => {
+  const navigate = useNavigate()
   const [reports, setReports] = useState([])
   const [selectedReport, setSelectedReport] = useState(null)
   const [analytics, setAnalytics] = useState(null)
@@ -369,6 +371,9 @@ const ManagerDashboardNew = () => {
           <p style={{ color: '#94a3b8', fontSize: '1.1rem' }}>
             Track team performance and engagement insights powered by AI
           </p>
+          <button onClick={()=>navigate('/nightfall/manager')} style={{ marginTop: 12, padding: '10px 14px', borderRadius: 8 }}>
+            Launch Nightfall v2
+          </button>
           
           {/* Demo Indicator */}
           <div style={{

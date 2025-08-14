@@ -53,16 +53,26 @@ export async function startGame(sessionId: string) {
     turn: 1,
     timers: { startedAt: serverTimestamp(), remainingSec: 1800 }
   })
-  // Write roles map from lobby
+  // Write roles map from lobby and initialize rooms
   const playersSnap = await get(ref(`lobbies/${sessionId}/players`))
-  if (playersSnap.exists()) {
-    const players = playersSnap.val() || {}
-    const roles: Record<string,string> = {}
-    Object.entries(players).forEach(([uid, p]: any) => {
-      if (p?.role && p.role !== 'manager') roles[uid] = p.role
-    })
-    await set(ref(`games/nightfall/${sessionId}/roles`), roles)
-  }
+  const players = playersSnap.exists() ? (playersSnap.val() || {}) : {}
+  const roles: Record<string,string> = {}
+  const playerUids = Object.keys(players).filter((uid) => players[uid]?.role && players[uid].role !== 'manager')
+  playerUids.forEach((uid) => { roles[uid] = players[uid].role })
+  await set(ref(`games/nightfall/${sessionId}/roles`), roles)
+
+  const roomIds = ['archives','lab','ops','vault']
+  const rooms: any = {}
+  roomIds.forEach((rid, idx) => {
+    rooms[rid] = {
+      leadUid: playerUids[idx % Math.max(1, playerUids.length)] || null,
+      solved: false,
+      progress: 0,
+      locks: { a: { open: false }, b: { open: false } },
+      clues: { x: { revealed: false }, y: { revealed: false } }
+    }
+  })
+  await set(ref(`games/nightfall/${sessionId}/rooms`), rooms)
   await update(ref(`lobbies/${sessionId}`), { status: 'in_progress', startedAt: serverTimestamp() })
 }
 
