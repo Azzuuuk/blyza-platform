@@ -124,10 +124,10 @@ const LobbyPage = () => {
                       }}
                     >
                       <option value="">Select role</option>
-                      <option value="lead">Lead</option>
-                      <option value="analyst">Analyst</option>
-                      <option value="operative">Operative</option>
-                      <option value="specialist">Specialist</option>
+                      <option value="technician">Technician</option>
+                      <option value="intelligence">Intelligence Analyst</option>
+                      <option value="communications">Communications Lead</option>
+                      <option value="fieldAgent">Field Recon Agent</option>
                     </select>
                   ) : (
                     <span className="text-sm text-gray-500">{p.role || '—'}</span>

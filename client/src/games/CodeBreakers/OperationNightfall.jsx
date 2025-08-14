@@ -1416,7 +1416,7 @@ const OperationNightfall = ({ sessionId: externalSessionId, role: assignedRolePr
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 350px', gap: '20px' }}>
             {/* Main Interface */}
             <div>
-              <TerminalWindow title={`${room.name.toUpperCase()} - ${ROLES[currentPlayerRole].name.toUpperCase()} INTERFACE`}>
+              <TerminalWindow title={`${room.name.toUpperCase()} - ${(ROLES[currentPlayerRole]?.name || 'AGENT').toUpperCase()} INTERFACE`}>
                 <RoleSpecificInterface 
                   room={room}
                   playerRole={currentPlayerRole}
