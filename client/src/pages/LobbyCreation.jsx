@@ -1,203 +1,74 @@
-
-import React, { useState, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
-import { ArrowLeft, Monitor, Loader2, Eye, UserPlus, CheckCircle, Copy } from 'lucide-react';
+import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { ArrowLeft, Monitor, Loader2 } from 'lucide-react';
 import { motion } from 'framer-motion';
-import { useGameStore } from '../stores/useGameStore';
+import toast from 'react-hot-toast';
+import { useAuthStore } from '../stores/useAuthStore';
+import { createGameSession } from '../services/firebaseMultiplayer';
 
-function LobbyCreation(props) {
-  // ...existing logic (state, hooks, etc.)
-  const currentGame = useGameStore(state => state.currentGame) || { color: '#6366f1', maxPlayers: 4, minPlayers: 2 };
-  const players = useGameStore(state => state.players) || {};
+function LobbyCreation() {
+  const navigate = useNavigate();
+  const { user } = useAuthStore();
+  const [creating, setCreating] = useState(false);
+
+  const handleCreate = async () => {
+    if (!user) {
+      toast.error('Please sign in');
+      navigate('/login');
+      return;
+    }
+    if (user.role !== 'manager') {
+      toast.error('Only managers can create sessions');
+      return;
+    }
+    setCreating(true);
+    try {
+      const res = await createGameSession('nightfall', { uid: user.uid, name: user.name, role: user.role }, 4);
+      if (!res.success) {
+        toast.error(res.error || 'Failed to create session');
+        return;
+      }
+      toast.success('Session created');
+      navigate(`/lobby/${res.session.id}`, { state: { roomCode: res.session.code } });
+    } catch (e) {
+      toast.error(e.message || 'Failed to create session');
+    } finally {
+      setCreating(false);
+    }
+  };
+
   return (
     <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #0f0f23 0%, #1a1a2e 50%, #16213e 100%)', color: '#e2e8f0' }}>
-      {/* Header */}
-      <header style={{ background: 'rgba(15, 23, 42, 0.8)', backdropFilter: 'blur(10px)', borderBottom: '1px solid rgba(51, 65, 85, 0.5)', position: 'sticky', top: 0, zIndex: 50 }}>
+      <header style={{ background: 'rgba(15, 23, 42, 0.8)', backdropFilter: 'blur(10px)', borderBottom: '1px solid rgba(51, 65, 85, 0.5)' }}>
         <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '0 24px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', height: '64px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <button onClick={() => navigate('/')} style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '8px 12px', color: '#cbd5e1', background: 'transparent', border: 'none', cursor: 'pointer' }}>
-                <ArrowLeft style={{ width: 20, height: 20 }} />
-                <span>Back</span>
-              </button>
-              <div style={{ width: 1, height: 24, background: '#475569' }} />
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <div style={{ width: 32, height: 32, background: `linear-gradient(135deg, ${currentGame.color}, #2563eb)`, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <Monitor style={{ width: 20, height: 20, color: 'white' }} />
-                </div>
-                <span style={{
-                  fontSize: 18,
-                  fontWeight: 700,
-                  backgroundImage: 'linear-gradient(135deg, #a78bfa, #60a5fa)',
-                  WebkitBackgroundClip: 'text',
-                  WebkitTextFillColor: 'transparent',
-                  display: 'inline-block'
-                }}>Manager Session</span>
+          <div style={{ display: 'flex', alignItems: 'center', height: '64px', gap: 12 }}>
+            <button onClick={() => navigate('/')} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '8px 12px', color: '#cbd5e1', background: 'transparent', border: 'none', cursor: 'pointer' }}>
+              <ArrowLeft style={{ width: 20, height: 20 }} />
+              <span>Back</span>
+            </button>
+            <div style={{ width: 1, height: 24, background: '#475569' }} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={{ width: 32, height: 32, background: 'linear-gradient(135deg, #7c3aed, #2563eb)', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Monitor style={{ width: 20, height: 20, color: 'white' }} />
               </div>
+              <span style={{ fontSize: 18, fontWeight: 700, backgroundImage: 'linear-gradient(135deg, #a78bfa, #60a5fa)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', display: 'inline-block' }}>Create Team Session</span>
             </div>
           </div>
         </div>
       </header>
-      <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '32px 24px' }}>
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} style={{ background: 'rgba(168, 85, 247, 0.1)', backdropFilter: 'blur(10px)', border: '2px solid rgba(168, 85, 247, 0.3)', borderRadius: '16px', padding: '32px', marginBottom: '24px' }}>
-          <h2 style={{ fontSize: '20px', fontWeight: 'bold', color: 'white', marginBottom: '16px' }}>Employees Joined ({Object.keys(players).length}/{currentGame.maxPlayers})</h2>
-          {Object.keys(players).length > 0 ? Object.values(players).map((player, index) => (
-            <div key={player.uid} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', background: 'rgba(34, 197, 94, 0.1)', border: '1px solid rgba(34, 197, 94, 0.3)', borderRadius: '8px', marginBottom: '8px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <div style={{ width: 32, height: 32, background: `linear-gradient(135deg, ${currentGame.color}, #2563eb)`, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px', color: 'white', fontWeight: 'bold' }}>{player.name?.charAt(0).toUpperCase() || '?'}</div>
-                <div>
-                  <div style={{ fontWeight: '600', color: 'white' }}>{player.name}</div>
-                  <div style={{ fontSize: '12px', color: '#22c55e' }}>Ready to play</div>
-                </div>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <label style={{ color: 'white', fontSize: '12px' }}>Role:</label>
-                <select value={player.role || ''} onChange={e => { /* Update role for this player in Firebase */ toast.success(`Assigned role ${e.target.value} to ${player.name}`) }} style={{ padding: '4px 8px', borderRadius: '4px', fontSize: '12px' }}>
-                  <option value="">Select</option>
-                  <option value="operative">Operative</option>
-                  <option value="analyst">Analyst</option>
-                  <option value="lead">Lead</option>
-                  {/* Add more roles as needed */}
-                </select>
-              </div>
-            </div>
-          )) : (
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '32px', background: 'rgba(51, 65, 85, 0.1)', border: '1px dashed rgba(71, 85, 105, 0.5)', borderRadius: '8px', color: '#64748b' }}>No employees have joined yet.</div>
-          )}
 
-          {/* Empty slots */}
-          {Array.from({ length: Math.max(0, currentGame.maxPlayers - Object.keys(players).length) }).map((_, index) => (
-            <div
-              key={`empty-${index}`}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                padding: '12px 16px',
-                background: 'rgba(51, 65, 85, 0.1)',
-                border: '1px dashed rgba(71, 85, 105, 0.5)',
-                borderRadius: '8px',
-                marginBottom: '8px',
-                color: '#64748b',
-                fontSize: '14px'
-              }}
-            >
-              <UserPlus style={{ width: 16, height: 16, marginRight: '8px' }} />
-              Open slot for employee...
-            </div>
-          ))}
-
-          {/* Start Session Button */}
-          <button
-            onClick={startGameSession_old}
-            disabled={Object.keys(players).length < currentGame.minPlayers || loading}
-            style={{
-              width: '100%',
-              padding: '16px',
-              background: Object.keys(players).length >= currentGame.minPlayers 
-                ? 'linear-gradient(135deg, #7c3aed, #2563eb)' 
-                : 'rgba(71, 85, 105, 0.5)',
-              color: 'white',
-              border: 'none',
-              borderRadius: '8px',
-              fontSize: '16px',
-              fontWeight: '600',
-              cursor: Object.keys(players).length >= currentGame.minPlayers ? 'pointer' : 'not-allowed',
-              opacity: Object.keys(players).length >= currentGame.minPlayers ? 1 : 0.5,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '8px'
-            }}
-          >
-            {loading ? (
-              <Loader2 style={{ width: 20, height: 20 }} />
-            ) : (
-              <Eye style={{ width: 20, height: 20 }} />
-            )}
-            {Object.keys(players).length >= currentGame.minPlayers 
-              ? 'Start Session & Observe' 
-              : `Need ${currentGame.minPlayers - Object.keys(players).length} more employees`
-            }
+      <div style={{ maxWidth: '720px', margin: '0 auto', padding: '48px 24px' }}>
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} style={{ background: 'rgba(51, 65, 85, 0.1)', border: '1px solid rgba(71, 85, 105, 0.3)', borderRadius: 16, padding: 32, textAlign: 'center' }}>
+          <h1 style={{ fontSize: 28, fontWeight: 800, marginBottom: 12, color: 'white' }}>Operation Nightfall</h1>
+          <p style={{ color: '#94a3b8', marginBottom: 24 }}>Create a lobby, share the code, and start when everyone has joined.</p>
+          <button onClick={handleCreate} disabled={creating} style={{ width: '100%', padding: 14, borderRadius: 8, border: 'none', color: 'white', background: creating ? 'rgba(71, 85, 105, 0.5)' : 'linear-gradient(135deg, #7c3aed, #2563eb)', cursor: creating ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+            {creating && <Loader2 style={{ width: 20, height: 20, animation: 'spin 1s linear infinite' }} />}
+            <span>{creating ? 'Creating…' : 'Create Lobby'}</span>
           </button>
-
-          {Object.keys(players).length >= currentGame.minPlayers && (
-            <div style={{
-              marginTop: '16px',
-              padding: '12px',
-              background: 'rgba(34, 197, 94, 0.1)',
-              border: '1px solid rgba(34, 197, 94, 0.3)',
-              borderRadius: '8px',
-              textAlign: 'center',
-              fontSize: '14px',
-              color: '#22c55e'
-            }}>
-              ✅ Ready to start! You'll observe the session and receive AI insights.
-            </div>
-          )}
         </motion.div>
-
-        {/* Room code and join link */}
-        <div style={{ marginTop: '32px', marginBottom: '24px' }}>
-          <label style={{ fontSize: '14px', color: '#94a3b8', marginBottom: '8px', display: 'block' }}>
-            Room Code
-          </label>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <div style={{ fontWeight: 'bold', fontSize: '20px', color: '#a78bfa', letterSpacing: '2px' }}>{lobby?.roomCode || 'LOADING'}</div>
-            <button
-              onClick={copyRoomCode}
-              style={{
-                padding: '8px 12px',
-                background: copied ? 'rgba(34, 197, 94, 0.2)' : 'rgba(59, 130, 246, 0.2)',
-                border: `2px solid ${copied ? '#22c55e' : '#3b82f6'}`,
-                borderRadius: '12px',
-                color: copied ? '#22c55e' : '#60a5fa',
-                cursor: 'pointer'
-              }}
-            >
-              {copied ? <CheckCircle style={{ width: 24, height: 24 }} /> : <Copy style={{ width: 24, height: 24 }} />}
-            </button>
-          </div>
-        </div>
-
-        <div style={{ marginBottom: '24px' }}>
-          <label style={{ fontSize: '14px', color: '#94a3b8', marginBottom: '8px', display: 'block' }}>
-            Direct Join Link
-          </label>
-          <div style={{ display: 'flex', gap: '12px' }}>
-            <input
-              type="text"
-              value={`${window.location.origin}/join?code=${lobby?.roomCode || 'LOADING'}`}
-              readOnly
-              style={{
-                flex: 1,
-                padding: '12px',
-                background: 'rgba(51, 65, 85, 0.3)',
-                border: '1px solid rgba(71, 85, 105, 0.5)',
-                borderRadius: '8px',
-                color: '#cbd5e1',
-                fontSize: '14px'
-              }}
-            />
-            <button
-              onClick={copyJoinLink}
-              style={{
-                padding: '8px 12px',
-                background: copied ? 'rgba(34, 197, 94, 0.2)' : 'rgba(59, 130, 246, 0.2)',
-                border: `2px solid ${copied ? '#22c55e' : '#3b82f6'}`,
-                borderRadius: '12px',
-                color: copied ? '#22c55e' : '#60a5fa',
-                cursor: 'pointer'
-              }}
-            >
-              {copied ? <CheckCircle style={{ width: 24, height: 24 }} /> : <Copy style={{ width: 24, height: 24 }} />}
-            </button>
-          </div>
-        </div>
       </div>
     </div>
   );
 }
 
 export default LobbyCreation;
-// Removed duplicate default export
