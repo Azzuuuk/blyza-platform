@@ -8,6 +8,7 @@ import { useGameStore } from '../stores/useGameStore';
 function LobbyCreation(props) {
   // ...existing logic (state, hooks, etc.)
   const currentGame = useGameStore(state => state.currentGame) || { color: '#6366f1', maxPlayers: 4, minPlayers: 2 };
+  const players = useGameStore(state => state.players) || {};
   return (
     <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #0f0f23 0%, #1a1a2e 50%, #16213e 100%)', color: '#e2e8f0' }}>
       {/* Header */}
