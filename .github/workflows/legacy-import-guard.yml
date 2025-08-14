@@ -1,0 +1,14 @@
+name: Legacy Import Guard
+on: [push, pull_request]
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fail if legacy imports are referenced
+        run: |
+          if grep -R "legacy/nightfall_v0" -n client/src || true; then
+            echo "Legacy nightfall_v0 import found" && exit 1
+          fi
+
+

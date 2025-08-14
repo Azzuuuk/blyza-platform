@@ -1,5 +1,5 @@
 import { ref } from '../api/firebase'
-import { push, set, serverTimestamp, update, onDisconnect, onValue } from 'firebase/database'
+import { push, set, serverTimestamp, update, onDisconnect, onValue, get } from 'firebase/database'
 
 export async function createSession(managerUid: string) {
   const sessionRef = push(ref('lobbies'))
@@ -53,6 +53,16 @@ export async function startGame(sessionId: string) {
     turn: 1,
     timers: { startedAt: serverTimestamp(), remainingSec: 1800 }
   })
+  // Write roles map from lobby
+  const playersSnap = await get(ref(`lobbies/${sessionId}/players`))
+  if (playersSnap.exists()) {
+    const players = playersSnap.val() || {}
+    const roles: Record<string,string> = {}
+    Object.entries(players).forEach(([uid, p]: any) => {
+      if (p?.role && p.role !== 'manager') roles[uid] = p.role
+    })
+    await set(ref(`games/nightfall/${sessionId}/roles`), roles)
+  }
   await update(ref(`lobbies/${sessionId}`), { status: 'in_progress', startedAt: serverTimestamp() })
 }
 
