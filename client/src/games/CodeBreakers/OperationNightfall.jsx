@@ -31,7 +31,7 @@ import {
   ChatMessage 
 } from './MissionComponents'
 
-const OperationNightfall = ({ sessionId: externalSessionId, role: assignedRoleProp, spectator: spectatorProp }) => {
+const OperationNightfall = ({ sessionId: externalSessionId, role: assignedRoleProp, spectator: spectatorProp, sharedGame }) => {
   const navigate = useNavigate()
 
   // Inject mission animations CSS
@@ -241,6 +241,31 @@ const OperationNightfall = ({ sessionId: externalSessionId, role: assignedRolePr
       addSystemMessage(`🎯 Role confirmed: ${assignedRoleProp}. Awaiting team coordination.`)
     }
   }, [assignedRoleProp, gamePhase, multiplayerMode, sessionId])
+
+  // Adopt sharedGame state if provided
+  useEffect(() => {
+    if (!sharedGame) return
+    try {
+      const { rooms = {}, chat = [], progress = {} } = sharedGame
+      // Map RTDB structure onto local view model
+      updateRoomProgress(prev => {
+        const mapped = { ...prev }
+        Object.entries(rooms).forEach(([id, r]) => {
+          mapped[id] = {
+            ...(mapped[id] || {}),
+            completed: !!r.solved,
+            unlocked: mapped[id]?.unlocked ?? (Number(id) === 1),
+            teamInputs: r.inputs || {}
+          }
+        })
+        return mapped
+      })
+      if (Array.isArray(chat)) {
+        // If chat stored as array
+        updateTeamChat(prev => [...prev, ...chat])
+      }
+    } catch {}
+  }, [sharedGame])
 
   // 🎯 Room Progress & Team Inputs (local fallback; optional Zustand store)
   const [roomProgressLocal, setRoomProgressLocal] = useState({
