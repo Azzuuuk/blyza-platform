@@ -1,42 +1,41 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import OperationNightfall from '../games/CodeBreakers/OperationNightfall'
-import { subscribeGame, fetchRoleForUser } from '../services/nightfallRTDB'
 import { useAuthStore } from '../stores/useAuthStore'
-import { rtdb } from '../lib/firebase'
-import { ref, get } from 'firebase/database'
 
 const GameplayPage = () => {
   const { user } = useAuthStore()
   const { sessionId } = useParams()
   const [searchParams] = useSearchParams()
-  const [role, setRole] = useState(null)
-  const [spectator, setSpectator] = useState(false)
-  const [game, setGame] = useState(null)
-
-  useEffect(() => {
-    setSpectator(searchParams.get('spectator') === '1')
-  }, [searchParams])
-
-  useEffect(() => {
-    const loadRole = async () => {
-      if (!user || !sessionId) return
-      try {
-        const assigned = await fetchRoleForUser(sessionId, user.uid)
-        if (assigned) setRole(assigned)
-      } catch {}
-    }
-    loadRole()
-  }, [user, sessionId])
+  const navigate = useNavigate()
 
   useEffect(() => {
     if (!sessionId) return
-    const unsub = subscribeGame(sessionId, setGame)
-    return () => unsub?.()
-  }, [sessionId])
+    
+    // Redirect to the new Nightfall v2 system
+    const isSpectator = searchParams.get('spectator') === '1'
+    const newPath = isSpectator 
+      ? `/nightfall/play/${sessionId}?spectator=1`
+      : `/nightfall/play/${sessionId}`
+    
+    navigate(newPath, { replace: true })
+  }, [sessionId, searchParams, navigate])
 
-  if (!sessionId) return null
-  return <OperationNightfall sessionId={sessionId} role={role} spectator={spectator} sharedGame={game} />
+  // Show loading while redirecting
+  return (
+    <div style={{ 
+      minHeight: '100vh', 
+      background: 'linear-gradient(135deg, #0f0f23 0%, #1a1a2e 50%, #16213e 100%)',
+      color: '#e2e8f0',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center'
+    }}>
+      <div style={{ textAlign: 'center' }}>
+        <div style={{ fontSize: '1.2rem', marginBottom: 8 }}>Redirecting to Nightfall v2...</div>
+        <div style={{ color: '#94a3b8' }}>Please wait...</div>
+      </div>
+    </div>
+  )
 }
 
 export default GameplayPage
