@@ -1,7 +1,7 @@
 // Firebase-based multiplayer client module: real-time game state with Firebase RTDB
 // Replaces Socket.IO with Firebase Realtime Database for game sessions
 
-import { subscribeToGameSession, updatePlayerAction } from '../../../services/firebaseMultiplayer'
+import { subscribeToGameState, updatePlayerAction } from '../../../services/firebaseMultiplayer'
 
 // Multiplayer stub flag for games that don't need real-time features
 export const isMultiplayerStub = true
@@ -22,7 +22,7 @@ export const initializeGameSession = (sessionId) => {
     unsubscribeGameState()
   }
   
-  unsubscribeGameState = subscribeToGameSession(sessionId, (gameState) => {
+  unsubscribeGameState = subscribeToGameState(sessionId, (gameState) => {
     // Handle real-time game state updates
     console.log('Game state updated:', gameState)
   })

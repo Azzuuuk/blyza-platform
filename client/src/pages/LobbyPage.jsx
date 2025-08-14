@@ -1,9 +1,53 @@
-import React from 'react'
-import { useNavigate } from 'react-router-dom'
+import React, { useEffect, useState } from 'react'
+import { useNavigate, useParams, useLocation } from 'react-router-dom'
 import { ArrowLeft, Sparkles } from 'lucide-react'
+import toast from 'react-hot-toast'
+import { useAuthStore } from '../stores/useAuthStore'
+import { subscribeToLobby, subscribeToPlayers, startGameSession } from '../services/firebaseMultiplayer'
 
 const LobbyPage = () => {
   const navigate = useNavigate()
+  const { lobbyId } = useParams()
+  const location = useLocation()
+  const { user } = useAuthStore()
+  const [lobby, setLobby] = useState(null)
+  const [players, setPlayers] = useState({})
+  const [starting, setStarting] = useState(false)
+
+  useEffect(() => {
+    if (!lobbyId) return
+    const unsubLobby = subscribeToLobby(lobbyId, (res) => {
+      if (res.success) setLobby(res.session)
+      else toast.error(res.error)
+    })
+    const unsubPlayers = subscribeToPlayers(lobbyId, (res) => {
+      if (res.success) setPlayers(res.players)
+    })
+    return () => {
+      unsubLobby?.()
+      unsubPlayers?.()
+    }
+  }, [lobbyId])
+
+  const onStart = async () => {
+    if (!user || user.uid !== lobby?.managerUid) {
+      toast.error('Only the manager can start')
+      return
+    }
+    const total = Object.keys(players || {}).length
+    if (total < 2) {
+      toast.error('At least 2 players required')
+      return
+    }
+    setStarting(true)
+    const res = await startGameSession(lobbyId, user.uid)
+    setStarting(false)
+    if (!res.success) {
+      toast.error(res.error || 'Failed to start')
+      return
+    }
+    navigate(`/game/${lobbyId}`)
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
@@ -35,30 +79,26 @@ const LobbyPage = () => {
 
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
         <div className="text-center">
-          <h1 className="text-4xl font-bold text-gray-900 mb-4">
-            Game Lobby
-          </h1>
-          <p className="text-xl text-gray-600 mb-8">
-            This feature is being implemented! Players will be able to wait here before games start.
-          </p>
+          <h1 className="text-4xl font-bold text-gray-900 mb-2">Game Lobby</h1>
+          <p className="text-gray-600 mb-1">Code: <span className="font-mono tracking-widest">{lobby?.code || location.state?.roomCode || '—'}</span></p>
+          <p className="text-gray-600 mb-8">Status: {lobby?.status || '—'}</p>
           
           <div className="bg-white rounded-2xl shadow-lg p-8 border border-gray-100">
-            <h2 className="text-2xl font-semibold mb-4">Lobby Features:</h2>
+            <h2 className="text-2xl font-semibold mb-4">Players</h2>
             <ul className="text-left space-y-2 max-w-md mx-auto">
-              <li>• Real-time player list</li>
-              <li>• Room code sharing</li>
-              <li>• Game settings preview</li>
-              <li>• Host controls</li>
-              <li>• Player chat</li>
+              {Object.entries(players || {}).map(([uid, p]) => (
+                <li key={uid} className="flex items-center justify-between">
+                  <span className="font-medium">{p.displayName}</span>
+                  <span className="text-sm text-gray-500">{p.role || (uid === lobby?.managerUid ? 'manager' : '—')}</span>
+                </li>
+              ))}
             </ul>
           </div>
-          
-          <button
-            onClick={() => navigate('/games')}
-            className="btn-primary mt-8"
-          >
-            Back to Games
-          </button>
+          {user?.uid === lobby?.managerUid && (
+            <button onClick={onStart} className="btn-primary mt-8" disabled={starting || (Object.keys(players||{}).length < 2)}>
+              {starting ? 'Starting…' : 'Start Game'}
+            </button>
+          )}
         </div>
       </div>
     </div>

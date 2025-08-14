@@ -1,0 +1,55 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "lobbies": {
+      "$sessionId": {
+        ".read": "auth != null && root.child('lobbies').child($sessionId).child('players').child(auth.uid).exists()",
+        ".write": "auth != null && root.child('lobbies').child($sessionId).child('players').child(auth.uid).exists()",
+        "status": {
+          ".validate": "newData.val() in ['lobby','in_progress','finished']"
+        },
+        "managerUid": {
+          ".read": "auth != null"
+        },
+        "players": {
+          "$uid": {
+            ".read": "auth != null && data.parent().parent().child('players').child(auth.uid).exists()",
+            ".write": "auth != null && ($uid === auth.uid || root.child('lobbies').child($sessionId).child('managerUid').val() === auth.uid)",
+            "connected": { ".validate": "newData.isBoolean()" },
+            "displayName": { ".validate": "newData.isString() && newData.val().length <= 100" },
+            "role": { ".validate": "newData.val() == null || newData.isString()" },
+            "ready": { ".validate": "newData.isBoolean()" },
+            "joinedAt": { ".validate": "newData.isNumber()" },
+            "lastSeen": { ".validate": "newData.isNumber()" }
+          }
+        }
+      }
+    },
+    "games": {
+      "nightfall": {
+        "$sessionId": {
+          ".read": "auth != null && root.child('lobbies').child($sessionId).child('players').child(auth.uid).exists()",
+          ".write": "auth != null && root.child('lobbies').child($sessionId).child('players').child(auth.uid).exists()",
+          "game": {
+            "phase": { ".validate": "newData.val() in ['LOBBY','IN_PROGRESS','COMPLETE']" }
+          }
+        }
+      }
+    },
+    "analytics": {
+      "$sessionId": {
+        ".read": "auth != null && root.child('lobbies').child($sessionId).child('players').child(auth.uid).exists()",
+        ".write": "auth != null && root.child('lobbies').child($sessionId).child('managerUid').val() === auth.uid"
+      }
+    },
+    "presence": {
+      "$uid": {
+        ".read": "auth != null && $uid === auth.uid",
+        ".write": "auth != null && $uid === auth.uid"
+      }
+    }
+  }
+}
+
+
