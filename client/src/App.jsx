@@ -32,8 +32,7 @@ const LoginPage = lazy(() => import('./pages/LoginPage'))
 const SignupPage = lazy(() => import('./pages/SignupPage'))
 const QuickGames = lazy(() => import('./pages/QuickGames'))
 
-// Games
-const CodeBreakersTeamGame = lazy(() => import('./games/CodeBreakers/CodeBreakersTeamGame'))
+// Games - Legacy CodeBreakers moved to legacy/nightfall_v0/
 import AuthGuard from './components/AuthGuard'
 import PageLoader from './components/PageLoader'
 
@@ -83,10 +82,7 @@ function RoutesWithBoundary() {
             <Route path="/join-game" element={<JoinGame />} />
             <Route path="/dashboard" element={<AuthGuard><ManagerDashboard /></AuthGuard>} />
             
-            {/* Game Routes */}
-            <Route path="/games/code-breakers" element={<AuthGuard><CodeBreakersTeamGame /></AuthGuard>} />
-            <Route path="/games/code-breakers/play" element={<AuthGuard><CodeBreakersTeamGame /></AuthGuard>} />
-            <Route path="/games/code-breakers/team" element={<AuthGuard><CodeBreakersTeamGame /></AuthGuard>} />
+            {/* Game Routes - Legacy CodeBreakers routes removed */}
             
             {/* Test Route */}
             <Route path="/test" element={<div style={{padding: '20px', color: 'white', background: '#1a1a2e', minHeight: '100vh'}}>✅ Test Route Working!</div>} />
