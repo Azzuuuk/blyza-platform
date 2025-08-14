@@ -213,24 +213,17 @@ export const startGameSession = async (sessionId, hostUid) => {
       }
     }
 
-    // Assign roles deterministically based on join order
+    // If roles pre-assigned by manager, keep them. Otherwise auto-assign.
     const playerEntries = Object.entries(session.players || {}).filter(([uid]) => uid !== hostUid)
-    const playerCount = playerEntries.length
-    const roleSets = {
-      2: ['lead', 'analyst'],
-      3: ['lead', 'analyst', 'operative'],
-      4: ['lead', 'analyst', 'operative', 'specialist']
+    const hasAssigned = playerEntries.some(([_, p]) => !!p.role)
+    if (!hasAssigned) {
+      const playerCount = playerEntries.length
+      const roleSets = { 2: ['lead', 'analyst'], 3: ['lead', 'analyst', 'operative'], 4: ['lead', 'analyst', 'operative', 'specialist'] }
+      const roles = roleSets[Math.min(4, Math.max(2, playerCount))] || roleSets[2]
+      const assignments = {}
+      playerEntries.slice(0, 4).forEach(([uid], idx) => { assignments[uid] = roles[idx] || 'operative' })
+      await Promise.all(Object.entries(assignments).map(([uid, role]) => update(ref(rtdb, `lobbies/${sessionId}/players/${uid}`), { role })))
     }
-    const roles = roleSets[Math.min(4, Math.max(2, playerCount))] || roleSets[2]
-    const assignments = {}
-    playerEntries.slice(0, 4).forEach(([uid], idx) => {
-      assignments[uid] = roles[idx] || 'operative'
-    })
-
-    // Persist role assignments
-    await Promise.all(Object.entries(assignments).map(([uid, role]) =>
-      update(ref(rtdb, `lobbies/${sessionId}/players/${uid}`), { role })
-    ))
 
     // Initialize game state
     const gameRef = ref(rtdb, `games/nightfall/${sessionId}`)

@@ -31,7 +31,7 @@ import {
   ChatMessage 
 } from './MissionComponents'
 
-const OperationNightfall = () => {
+const OperationNightfall = ({ sessionId: externalSessionId, role: assignedRoleProp, spectator: spectatorProp }) => {
   const navigate = useNavigate()
 
   // Inject mission animations CSS
@@ -46,7 +46,7 @@ const OperationNightfall = () => {
   const [gamePhase, setGamePhase] = useState('briefing') // briefing, setup, playing, completed
   const [currentRoom, setCurrentRoom] = useState(1)
   const [timeLeft, setTimeLeft] = useState(1800) // local fallback if store flag not used
-  const [sessionId] = useState(() => `sess-${Date.now()}-${Math.random().toString(36).slice(2,8)}`)
+  const [sessionId] = useState(() => externalSessionId || `sess-${Date.now()}-${Math.random().toString(36).slice(2,8)}`)
   const [startTime] = useState(Date.now())
   const [missionResults, setMissionResults] = useState(null)
   const searchParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : new URLSearchParams()
@@ -224,6 +224,23 @@ const OperationNightfall = () => {
   const [assignedRoles, setAssignedRoles] = useState(['', '', '', ''])
   const [activePlayerCount, setActivePlayerCount] = useState(4)
   const [currentPlayerRole, setCurrentPlayerRole] = useState('')
+  const [isSpectator, setIsSpectator] = useState(!!spectatorProp)
+
+  useEffect(() => { setIsSpectator(!!spectatorProp) }, [spectatorProp])
+
+  // If role provided (from lobby assignment), skip setup and start
+  useEffect(() => {
+    if (assignedRoleProp && gamePhase === 'briefing') {
+      setAssignedRoles([assignedRoleProp])
+      setCurrentPlayerRole(assignedRoleProp)
+      setActivePlayerCount(4)
+      setGamePhase('playing')
+      if (multiplayerMode) {
+        initMultiplayer(sessionId, assignedRoleProp, { realtime: true })
+      }
+      addSystemMessage(`🎯 Role confirmed: ${assignedRoleProp}. Awaiting team coordination.`)
+    }
+  }, [assignedRoleProp, gamePhase, multiplayerMode, sessionId])
 
   // 🎯 Room Progress & Team Inputs (local fallback; optional Zustand store)
   const [roomProgressLocal, setRoomProgressLocal] = useState({
@@ -351,6 +368,8 @@ const OperationNightfall = () => {
   const handleTeamInput = (inputType, data, role) => {
     const room = ROOMS[currentRoom]
     
+    // Spectator cannot interact
+    if (isSpectator) { toast.error('Spectator mode'); return }
     // Update room progress with team input
   updateRoomProgress(prev => ({
       ...prev,

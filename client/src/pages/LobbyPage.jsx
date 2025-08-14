@@ -4,6 +4,8 @@ import { ArrowLeft, Sparkles } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useAuthStore } from '../stores/useAuthStore'
 import { subscribeToLobby, subscribeToPlayers, startGameSession } from '../services/firebaseMultiplayer'
+import { rtdb } from '../lib/firebase'
+import { ref, update, get } from 'firebase/database'
 
 const LobbyPage = () => {
   const navigate = useNavigate()
@@ -29,6 +31,16 @@ const LobbyPage = () => {
     }
   }, [lobbyId])
 
+  // Redirect to gameplay when session starts
+  useEffect(() => {
+    if (!lobby || !user) return
+    if (lobby.status === 'in_progress') {
+      const isManager = user.uid === lobby.managerUid
+      if (isManager) navigate(`/game/${lobbyId}?spectator=1`)
+      else navigate(`/game/${lobbyId}`)
+    }
+  }, [lobby, user, navigate, lobbyId])
+
   const onStart = async () => {
     if (!user || user.uid !== lobby?.managerUid) {
       toast.error('Only the manager can start')
@@ -39,6 +51,12 @@ const LobbyPage = () => {
       toast.error('At least 2 players required')
       return
     }
+    // Validate roles assigned
+    const missing = Object.entries(players).filter(([uid, p]) => uid !== lobby.managerUid && !p.role)
+    if (missing.length) {
+      toast.error('Assign roles to all players before starting')
+      return
+    }
     setStarting(true)
     const res = await startGameSession(lobbyId, user.uid)
     setStarting(false)
@@ -46,7 +64,7 @@ const LobbyPage = () => {
       toast.error(res.error || 'Failed to start')
       return
     }
-    navigate(`/game/${lobbyId}`)
+    // Navigations handled by effect on lobby.status
   }
 
   return (
@@ -87,12 +105,40 @@ const LobbyPage = () => {
             <h2 className="text-2xl font-semibold mb-4">Players</h2>
             <ul className="text-left space-y-2 max-w-md mx-auto">
               {Object.entries(players || {}).map(([uid, p]) => (
-                <li key={uid} className="flex items-center justify-between">
+                <li key={uid} className="flex items-center justify-between gap-3">
                   <span className="font-medium">{p.displayName}</span>
-                  <span className="text-sm text-gray-500">{p.role || (uid === lobby?.managerUid ? 'manager' : '—')}</span>
+                  {uid === lobby?.managerUid ? (
+                    <span className="text-sm text-gray-500">manager</span>
+                  ) : user?.uid === lobby?.managerUid ? (
+                    <select
+                      className="border rounded px-2 py-1 text-sm"
+                      value={p.role || ''}
+                      onChange={async (e) => {
+                        const role = e.target.value || null
+                        try {
+                          await update(ref(rtdb, `lobbies/${lobbyId}/players/${uid}`), { role })
+                          toast.success(`Assigned ${role} to ${p.displayName}`)
+                        } catch (err) {
+                          toast.error('Failed to assign role')
+                        }
+                      }}
+                    >
+                      <option value="">Select role</option>
+                      <option value="lead">Lead</option>
+                      <option value="analyst">Analyst</option>
+                      <option value="operative">Operative</option>
+                      <option value="specialist">Specialist</option>
+                    </select>
+                  ) : (
+                    <span className="text-sm text-gray-500">{p.role || '—'}</span>
+                  )}
                 </li>
               ))}
             </ul>
+            <div className="text-left text-gray-600 mt-4">
+              <div className="font-semibold">Mission Briefing</div>
+              <p className="text-sm">Coordinate roles and review abilities. The Lead in each room needs inputs from the team to proceed.</p>
+            </div>
           </div>
           {user?.uid === lobby?.managerUid && (
             <button onClick={onStart} className="btn-primary mt-8" disabled={starting || (Object.keys(players||{}).length < 2)}>
