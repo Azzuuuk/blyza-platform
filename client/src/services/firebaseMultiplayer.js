@@ -49,6 +49,10 @@ export const createGameSession = async (gameType, hostUser, maxPlayers = 4) => {
 
     await set(sessionRef, sessionData)
 
+    // Map room code -> sessionId for secure lookups
+    const codeRef = ref(rtdb, `lobbyCodes/${roomCode}`)
+    await set(codeRef, { sessionId })
+
     // Add manager to players list
     const managerPlayerRef = ref(rtdb, `lobbies/${sessionId}/players/${hostUser.uid}`)
     await set(managerPlayerRef, {
@@ -95,56 +99,20 @@ export const joinGameSession = async (roomCode, playerUser) => {
   try {
     console.log('🔥 JOIN: Starting join process:', { roomCode, playerUser })
     
-    // Find lobby by room code
-    const sessionsRef = ref(rtdb, 'lobbies')
-    console.log('🔥 JOIN: Reading sessions from Firebase...')
-    
-    const snapshot = await get(sessionsRef)
-    console.log('🔥 JOIN: Sessions snapshot:', snapshot.exists(), snapshot.val())
-    
-    let targetSessionId = null
-    let targetSession = null
-
-    if (snapshot.exists()) {
-      const sessions = snapshot.val()
-      console.log('🔥 JOIN: Available sessions:', Object.keys(sessions))
-      
-      for (const [sessionId, session] of Object.entries(sessions)) {
-        console.log(`🔥 JOIN: Checking session ${sessionId}:`, { 
-          sessionRoomCode: session.roomCode, 
-          lookingFor: roomCode, 
-          status: session.status 
-        })
-        
-        if (session.code === roomCode && session.status === 'lobby') {
-          targetSessionId = sessionId
-          targetSession = session
-          console.log('✅ JOIN: Found matching session!')
-          break
-        }
-      }
+    // Resolve sessionId via lobbyCodes mapping (no broad read)
+    const codeRef = ref(rtdb, `lobbyCodes/${roomCode}`)
+    const codeSnap = await get(codeRef)
+    if (!codeSnap.exists()) {
+      console.error('❌ JOIN: Invalid or expired room code:', roomCode)
+      return { success: false, error: 'Invalid or expired room code' }
+    }
+    const targetSessionId = codeSnap.val()?.sessionId
+    if (!targetSessionId) {
+      console.error('❌ JOIN: Code mapping missing sessionId')
+      return { success: false, error: 'Invalid code mapping' }
     }
 
-    if (!targetSession) {
-      console.error('❌ JOIN: No session found for room code:', roomCode)
-      return {
-        success: false,
-        error: 'Lobby not found or already started'
-      }
-    }
-
-    console.log('🔥 JOIN: Target session found:', { targetSessionId, targetSession })
-
-    // Check if room is full
-    const currentPlayers = Object.keys(targetSession.players || {}).length
-    console.log('🔥 JOIN: Current players:', currentPlayers, 'Max:', targetSession.maxPlayers)
-    
-    if (currentPlayers >= targetSession.maxPlayers) {
-      return {
-        success: false,
-        error: 'Game session is full'
-      }
-    }
+    console.log('🔥 JOIN: Target session resolved:', { targetSessionId })
 
     // Add player to lobby with presence
     const playerRef = ref(rtdb, `lobbies/${targetSessionId}/players/${playerUser.uid}`)
@@ -171,12 +139,7 @@ export const joinGameSession = async (roomCode, playerUser) => {
     
     console.log('✅ JOIN: Successfully joined session!')
 
-    return {
-      success: true,
-      sessionId: targetSessionId,
-      session: targetSession,
-      message: 'Successfully joined game session'
-    }
+    return { success: true, sessionId: targetSessionId, message: 'Successfully joined game session' }
   } catch (error) {
     console.error('❌ JOIN: Firebase error:', error)
     console.error('❌ JOIN: Error code:', error.code)
