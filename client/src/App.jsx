@@ -23,6 +23,7 @@ const GameplayPage = lazy(() => import('./pages/GameplayPage'))
 const NightfallManager = lazy(() => import('./games/nightfall_v2/pages/Manager'))
 const NightfallLobby = lazy(() => import('./games/nightfall_v2/pages/Lobby'))
 const NightfallPlay = lazy(() => import('./games/nightfall_v2/pages/Play'))
+const NightfallResults = lazy(() => import('./games/nightfall_v2/pages/Results'))
 const ManagerFeedback = lazy(() => import('./pages/ManagerFeedback'))
 const ResultsPage = lazy(() => import('./pages/ResultsPage'))
 const GameSimulation = lazy(() => import('./pages/GameSimulationNew'))
@@ -48,6 +49,7 @@ const queryClient = new QueryClient({
 
 function RoutesWithBoundary() {
   const location = useLocation()
+  const { user } = useAuthStore()
   return (
     <ErrorBoundary key={location.pathname}>
       <Suspense fallback={<PageLoader label="Loading page…" />}> 
@@ -65,9 +67,10 @@ function RoutesWithBoundary() {
             <Route path="/game/analysis" element={<GameAnalysis />} />
             <Route path="/game/:sessionId" element={<GameplayPage />} />
             {/* v2 routes */}
-            <Route path="/nightfall/manager" element={<AuthGuard><NightfallManager user={{}} /></AuthGuard>} />
+            <Route path="/nightfall/manager" element={<AuthGuard><NightfallManager user={user} /></AuthGuard>} />
             <Route path="/nightfall/lobby/:sessionId" element={<AuthGuard><NightfallLobby sessionId={''} /></AuthGuard>} />
-            <Route path="/nightfall/play/:sessionId" element={<AuthGuard><NightfallPlay sessionId={''} user={{}} /></AuthGuard>} />
+            <Route path="/nightfall/play/:sessionId" element={<AuthGuard><NightfallPlay sessionId={''} user={user} /></AuthGuard>} />
+            <Route path="/nightfall/results/:sessionId" element={<AuthGuard><NightfallResults sessionId={''} user={user} /></AuthGuard>} />
             <Route path="/manager-feedback" element={<ManagerFeedback />} />
             <Route path="/ai-analysis-report" element={<AIAnalysisReport />} />
             <Route path="/post-game" element={<PostGameRouter />} />
